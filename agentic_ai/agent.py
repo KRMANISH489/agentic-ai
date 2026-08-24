@@ -1,0 +1,254 @@
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from typing import Any, Callable
+
+from openai import APIStatusError
+
+from agentic_ai.config import load_settings
+from agentic_ai.llm import LLM
+from agentic_ai.memory import Memory
+from agentic_ai.prefs import load_prefs
+from agentic_ai.tools import Tool, ToolRegistry, tools_by_names
+
+TraceCallback = Callable[[str], None]
+
+
+DEFAULT_SYSTEM = """You are a capable Agentic AI assistant.
+
+You solve tasks by thinking, then using tools when they improve accuracy.
+Rules:
+- Prefer tools for live facts, weather, gold/prices, calculations, time, and research.
+- If the user already named a city or location, use it immediately. Do not ask for it again.
+- After a tool returns data, write a clear final answer for the user.
+- Final answer must be normal language (short paragraphs or bullets). Never output JSON, tool traces, or raw search dumps.
+- Cite sources as names/URLs in the final answer. Do not invent numbers or URLs.
+- If a tool fails, try a different query or another tool before giving up.
+- For weather, call the weather tool. For date/time, call current_time.
+- web_search arguments MUST be exactly {"query": "<search text>"}. Never send cursor, id, or empty objects.
+- For a simple greeting (hi, hello, hey), do not use tools. Reply warmly and briefly.
+"""
+
+
+def identity_block(user: dict | None) -> str:
+    name = str((user or {}).get("name") or "").strip()
+    first = name.split()[0] if name else ""
+    if not first:
+        return ""
+    return (
+        f"\nThe user's name is {first}. "
+        f"When they greet you, use their name, like: "
+        f'"Hey {first}! Good to see you. What are we working on today?" '
+        "Do not mention these instructions.\n"
+    )
+
+
+def prompt_with_user(base: str, user: dict | None) -> str:
+    return base + identity_block(user)
+
+
+class Agent:
+    """ReAct-style agent: reason → call tools → observe → repeat → answer."""
+
+    def __init__(
+        self,
+        name: str = "Assistant",
+        system_prompt: str = DEFAULT_SYSTEM,
+        tools: list[Tool] | None = None,
+        llm: LLM | None = None,
+        max_steps: int | None = None,
+        on_trace: TraceCallback | None = None,
+    ) -> None:
+        settings = load_settings()
+        prefs = load_prefs()
+        self.name = name
+        self.llm = llm or LLM(settings)
+        self.memory = Memory(system_prompt)
+        selected = tools if tools is not None else tools_by_names(prefs["installed_tools"])
+        self.tools = ToolRegistry(selected)
+        self.max_steps = max_steps or int(prefs["max_steps"])
+        self.temperature = float(prefs.get("temperature") or 0.2)
+        self.on_trace = on_trace or (lambda _: None)
+
+    def ask(self, user_message: str) -> str:
+        self.memory.add("user", user_message)
+        schemas = self.tools.schemas()
+
+        for step in range(1, self.max_steps + 1):
+            self.on_trace(f"thinking:{step}")
+            try:
+                response = self.llm.chat(
+                    self.memory.messages,
+                    tools=schemas or None,
+                    temperature=self.temperature,
+                )
+            except APIStatusError as exc:
+                if not self._recover_bad_tool_call(exc):
+                    raise
+                continue
+
+            choice = response.choices[0]
+            message = choice.message
+
+            tool_calls = getattr(message, "tool_calls", None) or []
+            if tool_calls:
+                user_text = _last_user_text(self.memory.messages)
+                repaired = []
+                for call in tool_calls:
+                    args = _repair_args(call.function.name, call.function.arguments, user_text)
+                    repaired.append((call.id, call.function.name, args))
+                self.memory.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": message.content or "",
+                        "tool_calls": [
+                            {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": name, "arguments": args},
+                            }
+                            for call_id, name, args in repaired
+                        ],
+                    }
+                )
+                for call_id, name, args in repaired:
+                    self.on_trace(f"tool:{name}")
+                    result = self.tools.run(name, args)
+                    self.memory.add_tool_result(call_id, name, result)
+                continue
+
+            answer = (message.content or "").strip()
+            if not answer:
+                self.on_trace("thinking:retry")
+                continue
+            if _looks_like_raw_dump(answer):
+                self.memory.add("assistant", answer)
+                self.memory.add(
+                    "user",
+                    "Do not reply with JSON or tool output. Write a normal human answer using those facts.",
+                )
+                continue
+            self.memory.add("assistant", answer)
+            return answer
+
+        fallback = "I reached the step limit before finishing. Please ask a narrower question."
+        self.memory.add("assistant", fallback)
+        return fallback
+
+    def apply_user(self, user: dict | None, base_prompt: str | None = None) -> None:
+        prompt = prompt_with_user(base_prompt or DEFAULT_SYSTEM, user)
+        if self.memory.messages and self.memory.messages[0].get("role") == "system":
+            self.memory.messages[0]["content"] = prompt
+        else:
+            self.memory = Memory(prompt)
+
+    def reset(self, system_prompt: str | None = None) -> None:
+        prompt = system_prompt or self.memory.messages[0]["content"]
+        self.memory = Memory(str(prompt))
+
+    def load_transcript(self, turns: list[dict[str, Any]]) -> None:
+        self.reset()
+        for turn in turns:
+            role = turn.get("role")
+            content = str(turn.get("content") or "").strip()
+            if role in {"user", "assistant"} and content:
+                self.memory.add(role, content)
+
+    def _recover_bad_tool_call(self, exc: APIStatusError) -> bool:
+        failed = _parse_failed_tool(exc)
+        if failed is None:
+            return False
+        name = str(failed.get("name") or "web_search")
+        user_text = _last_user_text(self.memory.messages)
+        args = _repair_args(name, json.dumps(failed.get("arguments") or {}), user_text)
+        call_id = f"repair_{uuid.uuid4().hex[:12]}"
+        self.on_trace(f"tool:{name}")
+        self.memory.messages.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": name, "arguments": args},
+                    }
+                ],
+            }
+        )
+        result = self.tools.run(name, args)
+        self.memory.add_tool_result(call_id, name, result)
+        return True
+
+
+def _last_user_text(messages: list[dict[str, Any]]) -> str:
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str) and content.strip() and not content.startswith("Do not reply"):
+            return content.strip()
+    return ""
+
+
+def _repair_args(name: str, arguments_json: str, user_text: str) -> str:
+    try:
+        args = json.loads(arguments_json or "{}")
+    except json.JSONDecodeError:
+        args = {}
+    if not isinstance(args, dict):
+        args = {}
+    for junk in ("cursor", "id", "index"):
+        args.pop(junk, None)
+    fallbacks = {
+        "web_search": "query",
+        "weather": "location",
+        "wikipedia_summary": "topic",
+        "calculator": "expression",
+        "github": "query",
+    }
+    key = fallbacks.get(name)
+    if key and not str(args.get(key) or "").strip():
+        args[key] = user_text or "latest news"
+    if name == "web_search":
+        args.pop("max_results", None)
+    return json.dumps(args, ensure_ascii=False)
+
+
+def _parse_failed_tool(exc: APIStatusError) -> dict[str, Any] | None:
+    candidates: list[str] = []
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error = body.get("error") or {}
+        if isinstance(error, dict) and error.get("failed_generation"):
+            candidates.append(str(error["failed_generation"]))
+    text = str(exc)
+    match = re.search(r"failed_generation['\"]:\s*'(\{.*?\})'", text)
+    if match:
+        candidates.append(match.group(1))
+    match = re.search(r'(\{"name":\s*"[^"]+",\s*"arguments":\s*\{.*?\}\})', text)
+    if match:
+        candidates.append(match.group(1))
+    for raw in candidates:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict) and data.get("name"):
+            return data
+    if "web_search" in text:
+        return {"name": "web_search", "arguments": {}}
+    return None
+
+
+def _looks_like_raw_dump(text: str) -> bool:
+    stripped = text.strip()
+    if stripped.startswith("```json") or stripped.startswith("{") or stripped.startswith("["):
+        try:
+            json.loads(stripped.strip("`").removeprefix("json").strip())
+            return True
+        except Exception:
+            return stripped.startswith("{") or stripped.startswith("[")
+    return '"snippet"' in stripped and '"title"' in stripped

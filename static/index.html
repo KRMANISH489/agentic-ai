@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agentic</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/static/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,450;6..72,560&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --paper: #f7f4ef;
+      --paper-2: #efeae2;
+      --ink: #14120b;
+      --muted: #6f6b63;
+      --line: #e6e0d6;
+      --user-bg: #eee7dc;
+      --orange: #d97757;
+      --orange-dark: #c2613e;
+      --white: #fffcf8;
+      --danger: #8b2e2e;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, "Segoe UI", sans-serif;
+      font-size: 16px;
+    }
+    .shell {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100%;
+    }
+    .sidebar {
+      background: var(--paper-2);
+      border-right: 1px solid var(--line);
+      padding: 18px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px 14px;
+    }
+    .logo {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      perspective: 90px;
+    }
+    .logo-3d {
+      width: 22px;
+      height: 22px;
+      position: relative;
+      transform-style: preserve-3d;
+      animation: logo-3d 5.5s linear infinite;
+    }
+    .logo-3d > span {
+      position: absolute;
+      inset: 0;
+      clip-path: polygon(50% 0%, 61% 38%, 100% 50%, 61% 62%, 50% 100%, 39% 62%, 0 50%, 39% 38%);
+      background: linear-gradient(145deg, #6e2614 0%, #b24a2e 40%, #d97757 100%);
+      transform: translateZ(calc(var(--z) * 0.75px));
+    }
+    .logo-3d > span:last-child {
+      background:
+        radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), transparent 42%),
+        linear-gradient(145deg, #ffe6d0 0%, #f4a07a 28%, #d97757 58%, #8a331c 100%);
+      box-shadow:
+        0 8px 14px rgba(90, 28, 10, 0.28),
+        inset 0 1px 1px rgba(255,255,255,.4);
+    }
+    .logo-lg {
+      width: 72px;
+      height: 72px;
+      margin-bottom: 8px;
+      perspective: 140px;
+    }
+    .logo-lg .logo-3d {
+      width: 54px;
+      height: 54px;
+    }
+    .logo-lg .logo-3d > span {
+      transform: translateZ(calc(var(--z) * 1.35px));
+    }
+    .twinkle {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: linear-gradient(145deg, #fff, #e08a62);
+      clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+      animation: twinkle 1.8s ease-in-out infinite;
+      filter: drop-shadow(0 2px 2px rgba(120,40,10,.25));
+    }
+    .twinkle.t1 { top: -6px; right: 4px; animation-delay: 0s; }
+    .twinkle.t2 { bottom: 2px; left: -8px; animation-delay: .6s; width: 5px; height: 5px; }
+    .twinkle.t3 { top: 10px; right: -10px; animation-delay: 1.1s; width: 4px; height: 4px; }
+    body.is-thinking .logo-3d,
+    .logo.is-thinking .logo-3d {
+      animation-duration: 1.05s;
+    }
+    @keyframes logo-3d {
+      0%   { transform: rotateX(24deg) rotateY(0deg) rotateZ(-8deg); }
+      100% { transform: rotateX(24deg) rotateY(360deg) rotateZ(12deg); }
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.15; transform: scale(0.7) rotate(0deg); }
+      50% { opacity: 1; transform: scale(1.25) rotate(20deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .logo-3d, .twinkle { animation: none !important; }
+    }
+    .brand h1 {
+      margin: 0;
+      font-family: Newsreader, Georgia, serif;
+      font-size: 26px;
+      font-weight: 450;
+      letter-spacing: -0.03em;
+    }
+    .new-chat {
+      width: 100%;
+      border: 0;
+      background: var(--white);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font: 500 14px Inter, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 0 0 1px var(--line);
+      text-align: left;
+    }
+    .new-chat:hover { box-shadow: 0 0 0 1px #d7cfc3; }
+    .mode-picker { position: relative; }
+    .mode-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font: 500 13px Inter, sans-serif;
+      cursor: pointer;
+    }
+    .mode-btn:hover, .mode-picker.open .mode-btn {
+      border-color: #e0c4b4;
+      background: #fff8f3;
+    }
+    .mode-btn svg { color: var(--muted); flex-shrink: 0; }
+    .mode-menu {
+      display: none;
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 10px 28px rgba(70, 50, 20, 0.12);
+      overflow: hidden;
+      z-index: 20;
+      padding: 4px;
+    }
+    .mode-picker.open .mode-menu { display: block; }
+    .mode-menu button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      border-radius: 8px;
+      padding: 9px 10px;
+      font: 500 13px Inter, sans-serif;
+      cursor: pointer;
+    }
+    .mode-menu button:hover {
+      background: #f4ece4;
+      color: var(--ink);
+    }
+    .mode-menu button.active {
+      background: #f3d5c6;
+      color: #8a331c;
+    }
+    .model-chip {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 8px;
+      line-height: 1.4;
+    }
+    .history-label {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 4px 8px 0;
+    }
+    .history {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 0;
+      padding-right: 2px;
+    }
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font: 500 13px Inter, sans-serif;
+      cursor: pointer;
+      text-align: left;
+    }
+    .history-item:hover,
+    .history-item.active {
+      background: rgba(255, 255, 255, 0.7);
+    }
+    .history-item span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .history-item .del {
+      display: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .history-item:hover .del { display: block; }
+    .history-empty {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 8px 10px;
+    }
+    .model-chip.warn { color: var(--danger); }
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 100vh;
+    }
+    .stage {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 24px 12px;
+    }
+    .stage-inner {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .empty {
+      min-height: 58vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 10px;
+    }
+    .empty h2 {
+      margin: 0;
+      font-family: Newsreader, Georgia, serif;
+      font-size: 42px;
+      font-weight: 450;
+      letter-spacing: -0.03em;
+    }
+    .empty p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .empty.hidden, .setup { display: none; }
+    .setup.show {
+      display: block;
+      background: #fff4ee;
+      border: 1px solid #efd2c4;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+    .setup h3 { margin: 0 0 8px; font-size: 16px; }
+    .setup p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+    .setup a { color: var(--orange-dark); }
+    .setup-row { display: flex; gap: 8px; }
+    .setup input {
+      flex: 1;
+      border: 1px solid var(--line);
+      background: var(--white);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+    }
+    .setup button, #send {
+      background: var(--orange);
+      color: white;
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font: 600 13px Inter, sans-serif;
+      cursor: pointer;
+    }
+    .setup button:hover, #send:hover { background: var(--orange-dark); }
+    #chat {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      padding-bottom: 16px;
+    }
+    .msg { max-width: 100%; }
+    .msg.user {
+      align-self: flex-end;
+      background: var(--user-bg);
+      border-radius: 18px;
+      padding: 12px 16px;
+      max-width: 78%;
+    }
+    .msg.agent {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .msg.agent .logo {
+      margin-top: 2px;
+    }
+    .md { line-height: 1.7; }
+    .md p { margin: 0 0 10px; }
+    .md p:last-child { margin-bottom: 0; }
+    .md ul, .md ol { margin: 0 0 10px; padding-left: 20px; }
+    .trace {
+      color: var(--muted);
+      font-size: 13px;
+      font-style: italic;
+      margin-bottom: 8px;
+    }
+    .msg.error .md { color: var(--danger); }
+    .composer-wrap {
+      padding: 0 24px 22px;
+    }
+    form {
+      max-width: 720px;
+      margin: 0 auto;
+      background: var(--white);
+      border-radius: 22px;
+      padding: 10px 10px 10px 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      box-shadow: 0 8px 30px rgba(70, 50, 20, 0.08), 0 0 0 1px var(--line);
+    }
+    textarea {
+      flex: 1;
+      resize: none;
+      min-height: 44px;
+      max-height: 180px;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--ink);
+      font: 400 16px Inter, sans-serif;
+      padding: 10px 0;
+    }
+    #send {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    #send:disabled { opacity: 0.45; cursor: default; }
+    .hint {
+      max-width: 720px;
+      margin: 8px auto 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .settings-btn {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font: 500 13px Inter, sans-serif;
+      cursor: pointer;
+      text-align: left;
+    }
+    .settings-btn:hover { background: #fff8f3; border-color: #e0c4b4; }
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(40, 30, 18, 0.35);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .overlay.open { display: flex; }
+    .settings {
+      width: min(760px, 100%);
+      max-height: 88vh;
+      overflow: auto;
+      background: var(--paper);
+      border-radius: 20px;
+      box-shadow: 0 24px 60px rgba(40, 25, 10, 0.22);
+      padding: 22px;
+    }
+    .settings-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .settings-head h2 {
+      margin: 0;
+      font-family: Newsreader, Georgia, serif;
+      font-weight: 450;
+      font-size: 28px;
+    }
+    .close-x {
+      border: 0;
+      background: transparent;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs button {
+      border: 0;
+      background: transparent;
+      padding: 8px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font: 500 13px Inter, sans-serif;
+      color: var(--muted);
+    }
+    .tabs button.active { background: #f3d5c6; color: #8a331c; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .row label { font-weight: 500; }
+    .row p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .tool-card {
+      display: grid;
+      grid-template-columns: 44px 1fr auto;
+      gap: 8px 14px;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .tool-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #f4ece4;
+      color: #8a331c;
+      display: grid;
+      place-items: center;
+    }
+    .tool-icon svg { width: 22px; height: 22px; display: block; }
+    .tool-card h3 { margin: 0; font-size: 15px; }
+    .tool-card p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .chip {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .install, .remove {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: 600 12px Inter, sans-serif;
+      cursor: pointer;
+    }
+    .install { background: var(--orange); color: #fff; }
+    .remove { background: #eee7dc; color: #8a331c; }
+    .about-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 10px 16px;
+      font-size: 14px;
+    }
+    .about-grid dt { color: var(--muted); }
+    input[type="range"] { width: 160px; accent-color: var(--orange); }
+    .toggle {
+      width: 42px;
+      height: 24px;
+      border-radius: 999px;
+      border: 0;
+      background: #ddd4c8;
+      position: relative;
+      cursor: pointer;
+    }
+    .toggle.on { background: var(--orange); }
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: left .15s;
+    }
+    .toggle.on::after { left: 21px; }
+    .user-dock { position: relative; }
+    .user-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      background: transparent;
+      padding: 8px;
+      border-radius: 12px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .user-btn:hover { background: rgba(255,255,255,.65); }
+    .avatar-img, .avatar-fallback {
+      width: 32px; height: 32px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+    }
+    .avatar-fallback {
+      display: grid; place-items: center;
+      background: #4b7bec; color: #fff; font-size: 13px; font-weight: 600;
+    }
+    .user-btn strong { display: block; font-size: 14px; }
+    .user-btn em { font-style: normal; color: var(--muted); font-size: 12px; }
+    .user-menu {
+      display: none;
+      position: absolute;
+      left: 0; right: 0; bottom: 54px;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(50, 35, 15, .14);
+      padding: 8px;
+      z-index: 30;
+    }
+    .user-dock.open .user-menu { display: block; }
+    .user-email { color: var(--muted); font-size: 12px; padding: 8px 10px 10px; }
+    .user-menu a, .user-menu button.item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      background: transparent;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font: 500 14px Inter, sans-serif;
+      color: var(--ink);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .user-menu a:hover, .user-menu button.item:hover { background: #f4ece4; }
+    .user-menu .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+    .user-menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
+    .lang-sub { display: none; padding: 0 8px 8px 36px; }
+    .lang-sub.open { display: block; }
+    .lang-sub button { width: 100%; text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+    .lang-sub button:hover, .lang-sub button.active { background: #f3d5c6; color: #8a331c; }
+    .login-wall {
+      display: none;
+      position: fixed; inset: 0;
+      background: var(--paper);
+      z-index: 80;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    body.locked .login-wall { display: flex; }
+    body.locked .shell { display: none; }
+    .login-card {
+      width: min(420px, 100%);
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 16px 40px rgba(50, 30, 10, .08);
+      text-align: center;
+    }
+    .login-card h2 { font-family: Newsreader, Georgia, serif; font-weight: 450; font-size: 32px; margin: 12px 0 8px; }
+    .login-card p { color: var(--muted); margin: 0 0 18px; }
+    .oauth-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 11px 14px;
+      margin-bottom: 10px;
+      font: 600 14px Inter, sans-serif;
+      cursor: pointer;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .oauth-btn:hover { background: #faf6f1; }
+    .oauth-btn.gh { background: #24292f; color: #fff; border-color: #24292f; }
+    .login-form { text-align: left; }
+    .login-form label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin: 0 0 6px;
+    }
+    .login-form input {
+      width: 100%;
+      margin: 0 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: 14px Inter, sans-serif;
+      background: #fff;
+      color: var(--ink);
+    }
+    .login-form input:focus {
+      outline: 2px solid #f3d5c6;
+      border-color: #d9a08a;
+    }
+    .login-continue {
+      width: 100%;
+      border: 0;
+      background: var(--orange);
+      color: #fff;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font: 600 14px Inter, sans-serif;
+      cursor: pointer;
+    }
+    .login-continue:hover { filter: brightness(0.96); }
+    .login-card .login-error { color: #8a331c; }
+    .login-or {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .login-or::before, .login-or::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+    .login-oauth { display: block; }
+    .oauth-setup {
+      display: none;
+      text-align: left;
+      margin-top: 8px;
+      padding-top: 8px;
+    }
+    .oauth-setup a.oauth-docs {
+      display: inline-block;
+      margin: 0 0 10px;
+      color: #8a331c;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .oauth-setup p { margin: 0 0 8px; font-size: 13px; }
+    .oauth-setup code {
+      display: block;
+      font-size: 11px;
+      word-break: break-all;
+      background: #faf6f1;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+    }
+    .oauth-setup input {
+      width: 100%;
+      margin: 0 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: 14px Inter, sans-serif;
+    }
+    .oauth-actions { display: flex; gap: 8px; }
+    .oauth-actions button {
+      flex: 1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: 600 13px Inter, sans-serif;
+      cursor: pointer;
+    }
+    .oauth-save { border: 0; background: var(--orange); color: #fff; }
+    .oauth-cancel { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+    .help-box { color: var(--ink); line-height: 1.6; font-size: 14px; }
+  </style>
+</head>
+<body class="locked">
+  <div class="login-wall" id="loginWall">
+    <div class="login-card">
+      <span class="logo logo-lg" data-3d aria-hidden="true"></span>
+      <h2>Welcome to Agentic</h2>
+      <p>Sign in to continue. Your profile will appear in the sidebar.</p>
+      <form class="login-form" id="localLoginForm">
+        <label for="loginName">Name</label>
+        <input id="loginName" name="name" autocomplete="name" placeholder="Your name" required minlength="2" />
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+        <p class="login-error" id="loginError"></p>
+        <button class="login-continue" type="submit">Continue</button>
+      </form>
+      <div class="login-or">or</div>
+      <div class="login-oauth">
+        <a class="oauth-btn" id="googleBtn" href="/auth/google">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 12 24 12c3.1 0 5.8 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.3 35.3 26.8 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.2-3.5 5.8-6.6 7.3l6.2 5.2C37.5 38.3 44 33 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
+          Continue with Google
+        </a>
+        <a class="oauth-btn gh" id="githubBtn" href="/auth/github">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.68 7.68 0 0 1 8 3.64c.64 0 1.28.09 1.88.26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          Continue with GitHub
+        </a>
+      </div>
+      <form class="oauth-setup" id="oauthForm" autocomplete="off">
+        <p id="oauthSetupText"></p>
+        <a class="oauth-docs" id="oauthDocs" href="#" target="_blank" rel="noreferrer"></a>
+        <code id="oauthCallback"></code>
+        <input id="oauthId" name="client_id" placeholder="Client ID" autocomplete="username" />
+        <input id="oauthSecret" name="client_secret" type="password" placeholder="Client Secret" autocomplete="current-password" />
+        <p class="login-error" id="oauthError"></p>
+        <div class="oauth-actions">
+          <button class="oauth-cancel" id="cancelOauth" type="button">Cancel</button>
+          <button class="oauth-save" id="saveOauth" type="submit">Save and continue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="logo" data-3d aria-hidden="true"></span>
+        <h1>Agentic</h1>
+      </div>
+      <button class="new-chat" id="reset" type="button">+ New chat</button>
+      <div class="mode-picker" id="modePicker">
+        <button class="mode-btn" id="modeBtn" type="button">
+          <span id="modeLabel">Single agent</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+        <div class="mode-menu" id="modeMenu">
+          <button type="button" data-value="agent" class="active">Single agent</button>
+          <button type="button" data-value="crew">Researcher + Writer</button>
+        </div>
+      </div>
+      <div class="history-label">Recents</div>
+      <div id="history" class="history"></div>
+      <div class="user-dock" id="userDock">
+        <div class="user-menu" id="userMenu">
+          <div class="user-email" id="menuEmail"></div>
+          <button class="item" type="button" id="menuSettings">Settings <span class="hint">Ctrl+,</span></button>
+          <button class="item" type="button" id="menuLanguage">Language</button>
+          <div class="lang-sub" id="langSub">
+            <button type="button" data-lang="en" class="active">English</button>
+            <button type="button" data-lang="hi">Hindi</button>
+          </div>
+          <button class="item" type="button" id="menuHelp">Get help</button>
+          <hr />
+          <a class="item" href="/auth/logout">Log out</a>
+        </div>
+        <button class="user-btn" id="userMenuBtn" type="button">
+          <img class="avatar-img" id="userAvatar" alt="" hidden />
+          <span class="avatar-fallback" id="userInitials">A</span>
+          <span>
+            <strong id="userName">User</strong>
+            <em>Local</em>
+          </span>
+        </button>
+      </div>
+      <div class="model-chip" id="status">Starting…</div>
+    </aside>
+
+    <section class="main">
+      <div class="stage">
+        <div class="stage-inner">
+          <div class="setup" id="setup">
+            <h3>Add your Groq API key</h3>
+            <p>
+              Open <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com/keys</a>,
+              create a key, then paste it here.
+            </p>
+            <form class="setup-row" id="setupForm">
+              <input id="apiKey" type="password" name="api_key" placeholder="gsk_..." autocomplete="off" />
+              <button id="saveKey" type="submit">Save</button>
+            </form>
+          </div>
+          <div class="empty" id="empty">
+            <span class="logo logo-lg" data-3d aria-hidden="true">
+              <span class="twinkle t1"></span>
+              <span class="twinkle t2"></span>
+              <span class="twinkle t3"></span>
+            </span>
+            <h2>How can I help you today?</h2>
+            <p>Ask for weather, gold prices, research, or a calculation.</p>
+          </div>
+          <div id="chat"></div>
+        </div>
+      </div>
+      <div class="composer-wrap">
+        <form id="form">
+          <textarea id="input" placeholder="How can I help you today?" rows="1" required></textarea>
+          <button id="send" type="submit" aria-label="Send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
+          </button>
+        </form>
+        <div class="hint">Agentic can search the web, check weather, and use tools before it answers.</div>
+      </div>
+    </section>
+  </div>
+  <div class="overlay" id="settingsOverlay">
+    <div class="settings">
+      <div class="settings-head">
+        <h2>Settings</h2>
+        <button class="close-x" id="closeSettings" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="tabs">
+        <button type="button" class="active" data-tab="tools">Tools</button>
+        <button type="button" data-tab="features">Features</button>
+        <button type="button" data-tab="about">About</button>
+      </div>
+      <div class="panel active" id="tab-tools"></div>
+      <div class="panel" id="tab-features"></div>
+      <div class="panel" id="tab-about"></div>
+    </div>
+  </div>
+  <div class="overlay" id="helpOverlay">
+    <div class="settings">
+      <div class="settings-head">
+        <h2>Get help</h2>
+        <button class="close-x" id="closeHelp" type="button">×</button>
+      </div>
+      <div class="help-box">
+        <p>Sign in with Google or GitHub. Then ask questions in the chat box.</p>
+        <p>Use Settings to install tools like Dice or Unit Convert.</p>
+        <p>Single agent is best for quick questions. Researcher + Writer is better for long research.</p>
+      </div>
+    </div>
+  </div>
+  <script>
+    const chat = document.getElementById("chat");
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+    const statusEl = document.getElementById("status");
+    const modePicker = document.getElementById("modePicker");
+    const modeBtn = document.getElementById("modeBtn");
+    const modeLabel = document.getElementById("modeLabel");
+    const sendBtn = document.getElementById("send");
+    const empty = document.getElementById("empty");
+    const MODE_LABELS = { agent: "Single agent", crew: "Researcher + Writer" };
+    let currentMode = "agent";
+
+    function setMode(value) {
+      currentMode = MODE_LABELS[value] ? value : "agent";
+      modeLabel.textContent = MODE_LABELS[currentMode];
+      document.querySelectorAll("#modeMenu [data-value]").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-value") === currentMode);
+      });
+    }
+
+    function makeLogo3d(extraClass) {
+      const layers = Array.from({ length: 12 }, (_, i) => `<span style="--z:${i}"></span>`).join("");
+      return `<span class="logo ${extraClass || ""}" aria-hidden="true"><span class="logo-3d">${layers}</span></span>`;
+    }
+
+    function hydrateLogos() {
+      document.querySelectorAll("[data-3d]").forEach((el) => {
+        if (el.querySelector(".logo-3d")) return;
+        const wrap = document.createElement("span");
+        wrap.className = "logo-3d";
+        wrap.innerHTML = Array.from({ length: 12 }, (_, i) => `<span style="--z:${i}"></span>`).join("");
+        el.insertBefore(wrap, el.firstChild);
+      });
+    }
+
+    const sparkle = makeLogo3d("is-thinking");
+    hydrateLogos();
+
+    function applyUser(user) {
+      document.getElementById("userName").textContent = user.name || "User";
+      document.getElementById("menuEmail").textContent = user.email || "";
+      const img = document.getElementById("userAvatar");
+      const fallback = document.getElementById("userInitials");
+      if (user.picture) {
+        img.src = user.picture;
+        img.hidden = false;
+        fallback.hidden = true;
+      } else {
+        img.hidden = true;
+        fallback.hidden = false;
+        fallback.textContent = (user.name || "U").trim().charAt(0).toUpperCase();
+      }
+    }
+
+    let oauthReady = { google: false, github: false };
+    let pendingOauth = "";
+
+    function hideOauthSetup() {
+      pendingOauth = "";
+      document.getElementById("oauthForm").classList.remove("show");
+      document.getElementById("oauthError").textContent = "";
+      document.getElementById("oauthId").value = "";
+      document.getElementById("oauthSecret").value = "";
+    }
+
+    function showOauthSetup(provider) {
+      pendingOauth = provider;
+      const isGoogle = provider === "google";
+      const docs = document.getElementById("oauthDocs");
+      document.getElementById("oauthSetupText").textContent = isGoogle
+        ? "Create a Web OAuth client, then paste the Client ID and Secret. Authorized redirect URI:"
+        : "Create a GitHub OAuth app, then paste the Client ID and Secret. Authorization callback URL:";
+      docs.href = isGoogle
+        ? "https://console.cloud.google.com/auth/clients"
+        : "https://github.com/settings/developers";
+      docs.textContent = isGoogle ? "Open Google Cloud Console →" : "Open GitHub Developer settings →";
+      document.getElementById("oauthCallback").textContent = isGoogle
+        ? "http://127.0.0.1:7860/auth/google/callback"
+        : "http://127.0.0.1:7860/auth/github/callback";
+      document.getElementById("oauthId").placeholder = isGoogle
+        ? "….apps.googleusercontent.com"
+        : "GitHub Client ID";
+      document.getElementById("oauthError").textContent = "";
+      document.getElementById("oauthForm").classList.add("show");
+    }
+
+    async function submitOauth(e) {
+      e.preventDefault();
+      const err = document.getElementById("oauthError");
+      const btn = document.getElementById("saveOauth");
+      const clientId = document.getElementById("oauthId").value.trim();
+      const clientSecret = document.getElementById("oauthSecret").value.trim();
+      if (!pendingOauth || !clientId || !clientSecret) {
+        err.textContent = "Enter the Client ID and Client Secret.";
+        return;
+      }
+      btn.disabled = true;
+      err.textContent = "Saving…";
+      try {
+        const payload = pendingOauth === "google"
+          ? { google_client_id: clientId, google_client_secret: clientSecret }
+          : { github_client_id: clientId, github_client_secret: clientSecret };
+        const res = await fetch("/api/auth/keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const detail = data.detail;
+          err.textContent = typeof detail === "string" ? detail : "Could not save those keys. Try again.";
+          return;
+        }
+        oauthReady = data.oauth || oauthReady;
+        if (!oauthReady[pendingOauth]) {
+          err.textContent = "Could not save those keys. Try again.";
+          return;
+        }
+        window.location.href = pendingOauth === "google" ? "/auth/google" : "/auth/github";
+      } catch (exc) {
+        err.textContent = String(exc);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("oauthForm").addEventListener("submit", submitOauth);
+    document.getElementById("cancelOauth").addEventListener("click", hideOauthSetup);
+
+    async function bootAuth() {
+      const res = await fetch("/api/me");
+      const data = await res.json();
+      oauthReady = data.oauth || { google: false, github: false };
+      if (data.user) {
+        document.body.classList.remove("locked");
+        applyUser(data.user);
+        return true;
+      }
+      document.body.classList.add("locked");
+      return false;
+    }
+
+    function startApp() {
+      loadStore();
+      renderHistory();
+      loadStatus().then(() => {
+        if (appState.prefs && appState.prefs.default_mode) setMode(appState.prefs.default_mode);
+      });
+    }
+
+    let appState = { version: "—", prefs: { show_thinking: true, enter_to_send: true }, tools: [] };
+
+    async function loadStatus() {
+      const res = await fetch("/api/status");
+      const data = await res.json();
+      appState = data;
+      const setup = document.getElementById("setup");
+      if (data.ok) {
+        statusEl.className = "model-chip";
+        statusEl.textContent = "v" + data.version + " · " + data.provider + " · " + data.model;
+        setup.classList.remove("show");
+      } else {
+        statusEl.className = "model-chip warn";
+        statusEl.textContent = "v" + (data.version || "") + " · API key missing";
+        setup.classList.add("show");
+      }
+      renderSettings();
+      return data;
+    }
+
+    function renderSettings() {
+      const prefs = appState.prefs || {};
+      const tools = appState.tools || [];
+      const TOOL_ICONS = {
+        search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>',
+        wiki: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>',
+        weather: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>',
+        github: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.68 7.68 0 0 1 8 3.64c.64 0 1.28.09 1.88.26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>',
+        calc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/></svg>',
+        clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+        notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l5 5v13H7z"/><path d="M15 3v5h5M9 13h6M9 17h4"/></svg>',
+        dice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/></svg>',
+        convert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>',
+        text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h13"/></svg>',
+        key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v2"/></svg>',
+        shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20l7-7M21 3l-7 7M16 21h5v-5M4 4l5 5"/></svg>',
+      };
+      document.getElementById("tab-tools").innerHTML = tools.map((tool) => `
+        <div class="tool-card">
+          <div class="tool-icon">${TOOL_ICONS[tool.icon] || TOOL_ICONS.search}</div>
+          <div>
+            <div class="chip">${tool.category}</div>
+            <h3>${tool.title}</h3>
+            <p>${tool.blurb}</p>
+          </div>
+          <button class="${tool.installed ? "remove" : "install"}" data-tool="${tool.id}" data-on="${tool.installed ? "1" : "0"}">
+            ${tool.installed ? "Uninstall" : "Install"}
+          </button>
+        </div>
+      `).join("");
+
+      document.getElementById("tab-features").innerHTML = `
+        <div class="row"><div><label>Show thinking</label><p>Display search and tool status while the agent works.</p></div>
+          <button type="button" class="toggle ${prefs.show_thinking ? "on" : ""}" data-pref="show_thinking"></button></div>
+        <div class="row"><div><label>Enter to send</label><p>Press Enter to send. Shift+Enter adds a new line.</p></div>
+          <button type="button" class="toggle ${prefs.enter_to_send ? "on" : ""}" data-pref="enter_to_send"></button></div>
+        <div class="row"><div><label>Max steps</label><p>How many think → tool loops per question.</p></div>
+          <span><input id="maxSteps" type="range" min="2" max="16" value="${prefs.max_steps || 8}"> <b id="maxStepsVal">${prefs.max_steps || 8}</b></span></div>
+        <div class="row"><div><label>Creativity</label><p>Lower is more precise. Higher is more varied.</p></div>
+          <span><input id="temp" type="range" min="0" max="12" value="${Math.round((prefs.temperature || 0.2) * 10)}"> <b id="tempVal">${Number(prefs.temperature || 0.2).toFixed(1)}</b></span></div>
+        <div class="row"><div><label>Clear chat history</label><p>Delete all Recents from this browser.</p></div>
+          <button type="button" class="remove" id="clearHistory">Clear</button></div>
+      `;
+
+      document.getElementById("tab-about").innerHTML = `
+        <dl class="about-grid">
+          <dt>Version</dt><dd>Agentic ${appState.version || "1.2.0"}</dd>
+          <dt>Provider</dt><dd>${appState.provider || "not connected"}</dd>
+          <dt>Model</dt><dd>${appState.model || "—"}</dd>
+          <dt>Installed tools</dt><dd>${(prefs.installed_tools || []).length}</dd>
+          <dt>Default mode</dt><dd>${prefs.default_mode === "crew" ? "Researcher + Writer" : "Single agent"}</dd>
+          <dt>Runtime</dt><dd>Python · FastAPI · Groq-compatible LLM</dd>
+        </dl>
+      `;
+
+      const max = document.getElementById("maxSteps");
+      const temp = document.getElementById("temp");
+      if (max) max.oninput = () => { document.getElementById("maxStepsVal").textContent = max.value; };
+      if (temp) temp.oninput = () => { document.getElementById("tempVal").textContent = (Number(temp.value) / 10).toFixed(1); };
+      if (max) max.onchange = () => savePref({ max_steps: Number(max.value) });
+      if (temp) temp.onchange = () => savePref({ temperature: Number(temp.value) / 10 });
+      const clear = document.getElementById("clearHistory");
+      if (clear) clear.onclick = () => {
+        chats = [];
+        currentId = null;
+        saveStore();
+        renderHistory();
+        chat.innerHTML = "";
+        empty.classList.remove("hidden");
+      };
+    }
+
+    async function savePref(updates) {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      appState = await res.json();
+      renderSettings();
+    }
+
+    document.getElementById("setupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const apiKey = document.getElementById("apiKey").value.trim();
+      if (!apiKey) {
+        alert("Please paste your Groq API key first.");
+        return;
+      }
+      const res = await fetch("/api/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById("apiKey").value = "";
+        await loadStatus();
+      } else {
+        alert(data.error || "Could not save the key.");
+      }
+    });
+
+    const STORE_KEY = "agentic.chats.v1";
+    let chats = [];
+    let currentId = null;
+
+    function loadStore() {
+      try {
+        chats = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+      } catch {
+        chats = [];
+      }
+    }
+
+    function saveStore() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(chats));
+    }
+
+    function currentChat() {
+      return chats.find((c) => c.id === currentId) || null;
+    }
+
+    function titleFrom(text) {
+      const clean = text.replace(/\s+/g, " ").trim();
+      return clean.length > 42 ? clean.slice(0, 42) + "…" : clean || "New chat";
+    }
+
+    function renderHistory() {
+      const box = document.getElementById("history");
+      if (!chats.length) {
+        box.innerHTML = '<div class="history-empty">No chats yet</div>';
+        return;
+      }
+      box.innerHTML = chats
+        .slice()
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .map(
+          (c) =>
+            `<div class="history-item ${c.id === currentId ? "active" : ""}" data-id="${c.id}">
+              <span>${escapeHtml(c.title)}</span>
+              <button class="del" type="button" data-del="${c.id}" aria-label="Delete">×</button>
+            </div>`
+        )
+        .join("");
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function showMessages(messages) {
+      chat.innerHTML = "";
+      if (!messages.length) {
+        empty.classList.remove("hidden");
+        return;
+      }
+      empty.classList.add("hidden");
+      messages.forEach((m) => {
+        if (m.role === "user") addBubble("user", marked.parse(m.content), false);
+        else addBubble("agent", `<div><div class="md">${marked.parse(m.content)}</div></div>`, false);
+      });
+      const stage = document.querySelector(".stage");
+      stage.scrollTop = stage.scrollHeight;
+    }
+
+    function ensureChat(firstMessage) {
+      let item = currentChat();
+      if (!item) {
+        item = {
+          id: crypto.randomUUID(),
+          title: titleFrom(firstMessage),
+          mode: currentMode,
+          updatedAt: Date.now(),
+          messages: [],
+        };
+        chats.unshift(item);
+        currentId = item.id;
+      } else if (!item.messages.length) {
+        item.title = titleFrom(firstMessage);
+      }
+      item.updatedAt = Date.now();
+      item.mode = currentMode;
+      return item;
+    }
+
+    document.getElementById("history").addEventListener("click", async (e) => {
+      const del = e.target.closest("[data-del]");
+      if (del) {
+        e.stopPropagation();
+        const id = del.getAttribute("data-del");
+        chats = chats.filter((c) => c.id !== id);
+        if (currentId === id) {
+          currentId = null;
+          chat.innerHTML = "";
+          empty.classList.remove("hidden");
+          await fetch("/api/reset", { method: "POST" });
+        }
+        saveStore();
+        renderHistory();
+        return;
+      }
+      const row = e.target.closest(".history-item");
+      if (!row) return;
+      currentId = row.getAttribute("data-id");
+      const item = currentChat();
+      if (!item) return;
+      setMode(item.mode || "agent");
+      showMessages(item.messages);
+      renderHistory();
+      await fetch("/api/reset", { method: "POST" });
+    });
+
+    function hideEmpty() {
+      empty.classList.add("hidden");
+    }
+
+    function addBubble(role, html, scroll = true) {
+      hideEmpty();
+      const el = document.createElement("div");
+      el.className = "msg " + role;
+      el.innerHTML = role === "agent" ? sparkle + html : html;
+      if (role === "agent") {
+        const logo = el.querySelector(".logo");
+        if (logo && !html.includes("Thinking")) logo.classList.remove("is-thinking");
+      }
+      chat.appendChild(el);
+      if (scroll) {
+        const stage = document.querySelector(".stage");
+        stage.scrollTop = stage.scrollHeight;
+      }
+      return el;
+    }
+
+    function friendlyStatus(text) {
+      if (text.startsWith("tool:web_search")) return "Searching the web…";
+      if (text.startsWith("tool:weather")) return "Checking the weather…";
+      if (text.startsWith("tool:calculator")) return "Calculating…";
+      if (text.startsWith("tool:wikipedia")) return "Reading Wikipedia…";
+      if (text.startsWith("tool:current_time")) return "Checking the time…";
+      if (text.startsWith("tool:github")) return "Looking up GitHub…";
+      if (text.startsWith("tool:github")) return "Looking up GitHub…";
+      if (text.startsWith("tool:dice_roll")) return "Rolling dice…";
+      if (text.startsWith("tool:unit_convert")) return "Converting units…";
+      if (text.startsWith("tool:text_stats")) return "Counting text…";
+      if (text.startsWith("tool:uuid_generate")) return "Generating IDs…";
+      if (text.startsWith("tool:random_pick")) return "Picking an option…";
+      if (text.startsWith("tool:")) return "Using a tool…";
+      return "Thinking…";
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = "";
+      input.style.height = "auto";
+      const item = ensureChat(message);
+      const history = item.messages.map((m) => ({ role: m.role, content: m.content }));
+      item.messages.push({ role: "user", content: message });
+      saveStore();
+      renderHistory();
+      addBubble("user", marked.parse(message));
+      const agentEl = addBubble("agent", '<div><div class="traces"></div><div class="md">Thinking…</div></div>');
+      const tracesEl = agentEl.querySelector(".traces");
+      const mdEl = agentEl.querySelector(".md");
+      const avatar = agentEl.querySelector(".logo");
+      sendBtn.disabled = true;
+      document.body.classList.add("is-thinking");
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, mode: currentMode, history }),
+        });
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop();
+          for (const chunk of chunks) {
+            const line = chunk.replace(/^data: /, "").trim();
+            if (!line) continue;
+            const event = JSON.parse(line);
+            if (event.type === "trace") {
+              if (appState.prefs && appState.prefs.show_thinking === false) {
+                mdEl.textContent = "Thinking…";
+              } else {
+                tracesEl.innerHTML = '<div class="trace">' + friendlyStatus(event.content) + "</div>";
+                mdEl.textContent = "";
+              }
+            } else if (event.type === "answer") {
+              tracesEl.innerHTML = "";
+              mdEl.innerHTML = marked.parse(event.content);
+              avatar && avatar.classList.remove("is-thinking");
+              const live = currentChat();
+              if (live) {
+                live.messages.push({ role: "assistant", content: event.content });
+                live.updatedAt = Date.now();
+                saveStore();
+                renderHistory();
+              }
+            } else if (event.type === "error") {
+              agentEl.classList.add("error");
+              mdEl.textContent = event.content;
+              avatar && avatar.classList.remove("is-thinking");
+            }
+            const stage = document.querySelector(".stage");
+            stage.scrollTop = stage.scrollHeight;
+          }
+        }
+      } catch (err) {
+        agentEl.classList.add("error");
+        mdEl.textContent = String(err);
+      } finally {
+        sendBtn.disabled = false;
+        document.body.classList.remove("is-thinking");
+        avatar && avatar.classList.remove("is-thinking");
+        input.focus();
+      }
+    });
+
+    document.getElementById("reset").addEventListener("click", async () => {
+      await fetch("/api/reset", { method: "POST" });
+      currentId = null;
+      chat.innerHTML = "";
+      empty.classList.remove("hidden");
+      renderHistory();
+    });
+
+    modeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      modePicker.classList.toggle("open");
+    });
+    document.getElementById("modeMenu").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-value]");
+      if (!btn) return;
+      setMode(btn.getAttribute("data-value"));
+      modePicker.classList.remove("open");
+    });
+    document.addEventListener("click", () => {
+      modePicker.classList.remove("open");
+      document.getElementById("userDock").classList.remove("open");
+    });
+
+    input.addEventListener("input", () => {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 180) + "px";
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && (appState.prefs?.enter_to_send !== false)) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    function openSettings() {
+      document.getElementById("userDock").classList.remove("open");
+      document.getElementById("settingsOverlay").classList.add("open");
+      renderSettings();
+    }
+    document.getElementById("menuSettings").addEventListener("click", openSettings);
+    document.getElementById("closeSettings").addEventListener("click", () => {
+      document.getElementById("settingsOverlay").classList.remove("open");
+    });
+    document.getElementById("settingsOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "settingsOverlay") e.currentTarget.classList.remove("open");
+    });
+    document.querySelectorAll(".tabs button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      });
+    });
+    document.getElementById("tab-tools").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-tool]");
+      if (!btn) return;
+      const name = btn.getAttribute("data-tool");
+      const installed = btn.getAttribute("data-on") === "1";
+      const res = await fetch(installed ? "/api/tools/uninstall" : "/api/tools/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      appState = await res.json();
+      renderSettings();
+    });
+    document.getElementById("tab-features").addEventListener("click", async (e) => {
+      const tog = e.target.closest(".toggle");
+      if (!tog) return;
+      const key = tog.getAttribute("data-pref");
+      await savePref({ [key]: !tog.classList.contains("on") });
+    });
+
+    document.getElementById("userMenuBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.getElementById("userDock").classList.toggle("open");
+    });
+    document.getElementById("menuLanguage").addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.getElementById("langSub").classList.toggle("open");
+    });
+    document.getElementById("langSub").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-lang]");
+      if (!btn) return;
+      document.querySelectorAll("#langSub [data-lang]").forEach((b) => b.classList.toggle("active", b === btn));
+    });
+    document.getElementById("menuHelp").addEventListener("click", () => {
+      document.getElementById("userDock").classList.remove("open");
+      document.getElementById("helpOverlay").classList.add("open");
+    });
+    document.getElementById("closeHelp").addEventListener("click", () => {
+      document.getElementById("helpOverlay").classList.remove("open");
+    });
+    document.getElementById("helpOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "helpOverlay") e.currentTarget.classList.remove("open");
+    });
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        if (!document.body.classList.contains("locked")) openSettings();
+      }
+    });
+    document.getElementById("googleBtn").addEventListener("click", (e) => {
+      if (oauthReady.google) return;
+      e.preventDefault();
+      showOauthSetup("google");
+    });
+    document.getElementById("githubBtn").addEventListener("click", (e) => {
+      if (oauthReady.github) return;
+      e.preventDefault();
+      showOauthSetup("github");
+    });
+
+    document.getElementById("localLoginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = document.getElementById("loginError");
+      err.textContent = "";
+      const name = document.getElementById("loginName").value.trim();
+      const email = document.getElementById("loginEmail").value.trim();
+      const res = await fetch("/api/auth/local", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        err.textContent = data.detail || "Enter your name and a valid email.";
+        return;
+      }
+      document.body.classList.remove("locked");
+      applyUser(data.user);
+      startApp();
+    });
+
+    bootAuth().then((ok) => {
+      if (!ok) return;
+      startApp();
+    });
+  </script>
+</body>
+</html>
