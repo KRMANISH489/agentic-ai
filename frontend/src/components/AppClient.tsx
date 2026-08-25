@@ -198,6 +198,7 @@ export default function AppClient() {
   const [listening, setListening] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [voiceHint, setVoiceHint] = useState("");
+  const [navOpen, setNavOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -251,6 +252,11 @@ export default function AppClient() {
 
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key === "Escape") {
+        setNavOpen(false);
+        setSettingsOpen(false);
+        setHelpOpen(false);
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") {
         e.preventDefault();
         if (user) setSettingsOpen(true);
@@ -357,6 +363,7 @@ export default function AppClient() {
     await fetch("/api/reset", { method: "POST", credentials: "include" });
     setCurrentId(null);
     setBubbles([]);
+    setNavOpen(false);
   }
 
   async function selectChat(id: string) {
@@ -365,6 +372,7 @@ export default function AppClient() {
     setCurrentId(id);
     setMode(item.mode || "agent");
     showMessages(item.messages);
+    setNavOpen(false);
     await fetch("/api/reset", { method: "POST", credentials: "include" });
   }
 
@@ -748,7 +756,7 @@ export default function AppClient() {
   const googleSetup = pendingOauth === "google";
 
   return (
-    <div className={`app ${user ? "" : "locked"} ${sending ? "is-thinking" : ""}`}>
+    <div className={`app ${user ? "" : "locked"} ${sending ? "is-thinking" : ""} ${navOpen ? "nav-open" : ""}`}>
       {!user && (
         <div className="login-wall">
           <div className="login-card">
@@ -875,10 +883,19 @@ export default function AppClient() {
       )}
 
       <div className="shell">
+        <button
+          className="nav-backdrop"
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setNavOpen(false)}
+        />
         <aside className="sidebar">
           <div className="brand">
             <Logo />
             <h1>Agentic</h1>
+            <button className="sidebar-close" type="button" aria-label="Close menu" onClick={() => setNavOpen(false)}>
+              ×
+            </button>
           </div>
           <button className="new-chat" type="button" onClick={() => void newChat()}>
             + New chat
@@ -941,7 +958,7 @@ export default function AppClient() {
           <div className={`user-dock ${userOpen ? "open" : ""}`} onClick={(e) => e.stopPropagation()}>
             <div className="user-menu">
               <div className="user-email">{user?.email}</div>
-              <button className="item" type="button" onClick={() => { setUserOpen(false); setSettingsOpen(true); }}>
+              <button className="item" type="button" onClick={() => { setUserOpen(false); setNavOpen(false); setSettingsOpen(true); }}>
                 Settings <span className="hint">Ctrl+,</span>
               </button>
               <button className="item" type="button" onClick={() => setLangOpen((v) => !v)}>
@@ -955,7 +972,7 @@ export default function AppClient() {
                   Hindi
                 </button>
               </div>
-              <button className="item" type="button" onClick={() => { setUserOpen(false); setHelpOpen(true); }}>
+              <button className="item" type="button" onClick={() => { setUserOpen(false); setNavOpen(false); setHelpOpen(true); }}>
                 Get help
               </button>
               <hr />
@@ -984,6 +1001,25 @@ export default function AppClient() {
         </aside>
 
         <section className="main">
+          <header className="topbar">
+            <button
+              className="menu-btn"
+              type="button"
+              aria-label="Open menu"
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen(true)}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+            <h1>Agentic</h1>
+            <button className="topbar-new" type="button" aria-label="New chat" onClick={() => void newChat()}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </header>
           <div className="stage" ref={stageRef}>
             <div className="stage-inner">
               {!appState.ok && (
