@@ -972,7 +972,7 @@ export default function AppClient() {
               )}
               <span>
                 <strong>{user?.name || "User"}</strong>
-                <em>Local</em>
+                <em>{user?.email || ""}</em>
               </span>
             </button>
           </div>
