@@ -219,6 +219,22 @@ export default function AppClient() {
   }, [chats, ready, user]);
 
   useEffect(() => {
+    async function boot() {
+      const oauthErr = new URLSearchParams(window.location.search).get("oauth_error");
+      if (oauthErr) {
+        setPendingOauth("google");
+        setOauthError(oauthErr);
+        window.history.replaceState({}, "", "/");
+      }
+      const res = await fetch("/api/me", { credentials: "include" });
+      const data = await res.json();
+      setOauthReady(data.oauth || { google: false, github: false });
+      if (data.user) {
+        setUser(data.user);
+        await loadStatus();
+      }
+      setReady(true);
+    }
     void boot();
   }, []);
 
@@ -259,23 +275,6 @@ export default function AppClient() {
       window.speechSynthesis?.cancel();
     };
   }, []);
-
-  async function boot() {
-    const oauthErr = new URLSearchParams(window.location.search).get("oauth_error");
-    if (oauthErr) {
-      setPendingOauth("google");
-      setOauthError(oauthErr);
-      window.history.replaceState({}, "", "/");
-    }
-    const res = await fetch("/api/me", { credentials: "include" });
-    const data = await res.json();
-    setOauthReady(data.oauth || { google: false, github: false });
-    if (data.user) {
-      setUser(data.user);
-      await loadStatus();
-    }
-    setReady(true);
-  }
 
   async function loadStatus() {
     const res = await fetch("/api/status", { credentials: "include" });
@@ -507,7 +506,7 @@ export default function AppClient() {
             );
           }
         }
-        stageRef.current && (stageRef.current.scrollTop = stageRef.current.scrollHeight);
+        if (stageRef.current) stageRef.current.scrollTop = stageRef.current.scrollHeight;
       }
     } catch (err) {
       setBubbles((prev) =>
@@ -784,6 +783,8 @@ export default function AppClient() {
             </form>
             <div className="login-or">or</div>
             <div className="login-oauth">
+              {/* Full navigation: OAuth must leave the SPA so the API can set cookies. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 className="oauth-btn"
                 href="/auth/google"
@@ -796,6 +797,7 @@ export default function AppClient() {
               >
                 Continue with Google
               </a>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 className="oauth-btn gh"
                 href="/auth/github"
@@ -957,6 +959,7 @@ export default function AppClient() {
                 Get help
               </button>
               <hr />
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a className="item" href="/auth/logout">
                 Log out
               </a>
