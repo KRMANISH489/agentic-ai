@@ -502,7 +502,7 @@ export default function AppClient() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, mode, history, images }),
+        body: JSON.stringify({ message, mode, history, images, lang }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -664,7 +664,8 @@ export default function AppClient() {
   }
 
   function speechLang() {
-    return lang === "hi" ? "hi-IN" : "en-IN";
+    if (lang === "hi" || lang === "bho") return "hi-IN";
+    return "en-IN";
   }
 
   function resizeComposer() {
@@ -1090,6 +1091,9 @@ export default function AppClient() {
                 </button>
                 <button type="button" className={lang === "hi" ? "active" : ""} onClick={() => setLang("hi")}>
                   Hindi
+                </button>
+                <button type="button" className={lang === "bho" ? "active" : ""} onClick={() => setLang("bho")}>
+                  Bhojpuri
                 </button>
               </div>
               <button className="item" type="button" onClick={() => { setUserOpen(false); setNavOpen(false); setHelpOpen(true); }}>

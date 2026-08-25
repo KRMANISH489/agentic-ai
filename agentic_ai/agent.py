@@ -29,6 +29,7 @@ Rules:
 - For weather, call the weather tool. For date/time, call current_time.
 - web_search arguments MUST be exactly {"query": "<search text>"}. Never send cursor, id, or empty objects.
 - For a simple greeting (hi, hello, hey), do not use tools. Reply warmly and briefly.
+- If the user language is Hindi, reply in Hindi. If Bhojpuri, reply in Bhojpuri. Otherwise reply in English unless they wrote in another language.
 """
 
 

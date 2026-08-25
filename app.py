@@ -74,6 +74,7 @@ class ChatRequest(BaseModel):
     mode: str = "agent"
     history: list[HistoryTurn] = []
     images: list[str] = []
+    lang: str = "en"
 
 
 class SetupRequest(BaseModel):
@@ -358,6 +359,14 @@ def uninstall_tool(req: ToolAction, _user: dict = Depends(require_user)) -> dict
     return _status_payload()
 
 
+def _reply_lang_note(lang: str) -> str:
+    if lang == "bho":
+        return "\n\nReply in Bhojpuri."
+    if lang == "hi":
+        return "\n\nReply in Hindi."
+    return ""
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingResponse:
     events: queue.Queue[dict | None] = queue.Queue()
@@ -370,25 +379,21 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
             with _lock:
                 runner = _get_runner(req.mode, on_trace, user)
                 transcript = [{"role": t.role, "content": t.content} for t in req.history]
+                prompt = req.message.strip() + _reply_lang_note(req.lang)
+                photos = [
+                    url
+                    for url in req.images[:4]
+                    if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
+                ]
                 if req.mode == "crew" and _crew is not None:
                     _crew.researcher.load_transcript(transcript)
                     _crew.writer.reset()
-                    photos = [
-                        url
-                        for url in req.images[:4]
-                        if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
-                    ]
-                    answer = _crew.run(req.message.strip(), images=photos or None)
+                    answer = _crew.run(prompt, images=photos or None)
                 elif _agent is not None:
                     _agent.load_transcript(transcript)
-                    photos = [
-                        url
-                        for url in req.images[:4]
-                        if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
-                    ]
-                    answer = _agent.ask(req.message.strip(), images=photos or None)
+                    answer = _agent.ask(prompt, images=photos or None)
                 else:
-                    answer = runner(req.message.strip())
+                    answer = runner(prompt)
             events.put({"type": "answer", "content": answer})
         except Exception as exc:
             events.put({"type": "error", "content": str(exc)})
