@@ -1530,6 +1530,8 @@ export default function AppClient() {
           {settingsTab === "about" && (
             <div className="panel active">
               <dl className="about-grid">
+                <dt>About me</dt>
+                <dd>Abhishek Mishra</dd>
                 <dt>Version</dt>
                 <dd>Agentic {appState.version || "1.5.0"}</dd>
                 <dt>Provider</dt>
