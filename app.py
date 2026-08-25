@@ -106,11 +106,17 @@ class OAuthKeys(BaseModel):
     github_client_secret: str = ""
 
 
+def _is_loopback_host(host: str | None) -> bool:
+    return (host or "").lower() in {"127.0.0.1", "localhost", "::1"}
+
+
 def frontend_origin() -> str:
     raw = (os.getenv("FRONTEND_URL") or "").strip().rstrip("/")
     if not raw or raw == "/":
-        raw = (os.getenv("AUTH_BASE_URL") or "http://127.0.0.1:3000").strip().rstrip("/")
+        raw = (os.getenv("AUTH_BASE_URL") or "").strip().rstrip("/")
     if not raw or raw == "/":
+        if os.getenv("VERCEL"):
+            return ""
         raw = "http://127.0.0.1:3000"
     return raw
 
@@ -177,7 +183,12 @@ def index(request: Request):
     here = (request.url.hostname or "").lower()
     dest_host = (parsed.hostname or "").lower()
     # Empty FRONTEND_URL used to redirect to "/" and loop (ERR_TOO_MANY_REDIRECTS on Vercel).
-    if dest in {"/", ""} or parsed.path in {"", "/"} and (not dest_host or dest_host == here):
+    same_host = dest in {"/", ""} or (
+        parsed.path in {"", "/"} and (not dest_host or dest_host == here)
+    )
+    # Live hosts must not send the browser to a local Next.js server.
+    public_to_local = _is_loopback_host(dest_host) and not _is_loopback_host(here)
+    if same_host or public_to_local:
         return JSONResponse(
             {
                 "ok": True,
