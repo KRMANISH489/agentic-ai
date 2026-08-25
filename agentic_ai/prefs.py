@@ -6,7 +6,7 @@ from pathlib import Path
 from agentic_ai.config import ROOT_DIR
 
 PREFS_PATH = ROOT_DIR / "settings.json"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 
 CORE_TOOLS = [
     "calculator",

@@ -54,7 +54,7 @@ copy .env.example .env
 
 `.env` mein `GROQ_API_KEY=...` paste karo.
 
-## Web app (v1.4.0)
+## Web app (v1.5.0)
 
 Browser UI **Next.js** par hai. Pehle API, phir frontend:
 

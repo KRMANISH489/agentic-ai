@@ -1531,7 +1531,7 @@ export default function AppClient() {
             <div className="panel active">
               <dl className="about-grid">
                 <dt>Version</dt>
-                <dd>Agentic {appState.version || "1.4.0"}</dd>
+                <dd>Agentic {appState.version || "1.5.0"}</dd>
                 <dt>Provider</dt>
                 <dd>{appState.provider || "not connected"}</dd>
                 <dt>Model</dt>
