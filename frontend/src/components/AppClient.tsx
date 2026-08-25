@@ -855,7 +855,7 @@ export default function AppClient() {
                   type="password"
                   value={oauthSecret}
                   onChange={(e) => setOauthSecret(e.target.value)}
-                  placeholder="Client Secret"
+                  placeholder="GOCSPX-…"
                   autoComplete="current-password"
                 />
                 <p className="login-error">{oauthError}</p>

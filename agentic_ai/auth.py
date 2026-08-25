@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import secrets
 from urllib.parse import urlencode
@@ -50,6 +51,34 @@ def is_github_client_id(value: str) -> bool:
 
 def is_google_secret(value: str) -> bool:
     return value.startswith("GOCSPX-") and len(value) >= 24
+
+
+def _clean_oauth_value(value: str) -> str:
+    return (
+        str(value or "")
+        .strip()
+        .strip('"')
+        .strip("'")
+        .replace("\r", "")
+        .replace("\n", "")
+        .replace(" ", "")
+    )
+
+
+def _google_json_secrets(raw: str) -> tuple[str, str]:
+    text = str(raw or "").strip()
+    if not text.startswith("{"):
+        return "", ""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return "", ""
+    if not isinstance(data, dict):
+        return "", ""
+    block = data.get("web") or data.get("installed") or data
+    if not isinstance(block, dict):
+        return "", ""
+    return str(block.get("client_id") or ""), str(block.get("client_secret") or "")
 
 
 def oauth_status() -> dict:
@@ -259,19 +288,34 @@ def finish_github(request: Request, code: str, state: str) -> dict:
 
 
 def save_oauth_keys(payload: dict) -> dict:
-    google_id = str(payload.get("google_client_id") or "").strip()
-    github_id = str(payload.get("github_client_id") or "").strip()
+    google_id = _clean_oauth_value(payload.get("google_client_id") or "")
+    google_secret = _clean_oauth_value(payload.get("google_client_secret") or "")
+    json_id, json_secret = _google_json_secrets(str(payload.get("google_client_secret") or ""))
+    if not json_id:
+        json_id, json_secret = _google_json_secrets(str(payload.get("google_client_id") or ""))
+    if json_id:
+        google_id = _clean_oauth_value(json_id)
+    if json_secret:
+        google_secret = _clean_oauth_value(json_secret)
     if google_id and not is_google_client_id(google_id):
         raise HTTPException(
             status_code=400,
             detail="That is not a Google Client ID. Create an OAuth client in Google Cloud Console — it ends with .apps.googleusercontent.com.",
         )
-    google_secret = str(payload.get("google_client_secret") or "").strip()
-    if google_secret and (not google_secret.startswith("GOCSPX-") or len(google_secret) < 24):
+    if google_secret and is_google_client_id(google_secret):
         raise HTTPException(
             status_code=400,
-            detail="That Client Secret looks incomplete. Copy the full secret from Google Cloud Console — it starts with GOCSPX- and is a long value.",
+            detail="That value is the Client ID. Paste the Client Secret instead — it starts with GOCSPX-.",
         )
+    if google_secret and not is_google_secret(google_secret):
+        raise HTTPException(
+            status_code=400,
+            detail="That Client Secret looks incomplete. In Google Cloud click the client → copy Client Secret. It starts with GOCSPX- and is one long value (not the Client ID).",
+        )
+    if google_id:
+        payload = {**payload, "google_client_id": google_id}
+    if google_secret:
+        payload = {**payload, "google_client_secret": google_secret}
     mapping = {
         "google_client_id": "GOOGLE_CLIENT_ID",
         "google_client_secret": "GOOGLE_CLIENT_SECRET",
@@ -280,6 +324,8 @@ def save_oauth_keys(payload: dict) -> dict:
     }
     for field, env_key in mapping.items():
         value = str(payload.get(field) or "").strip()
+        if field.startswith("google_"):
+            value = _clean_oauth_value(value)
         if value:
             set_env_value(env_key, value)
     return oauth_status()
