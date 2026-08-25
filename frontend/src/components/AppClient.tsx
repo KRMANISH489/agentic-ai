@@ -1529,8 +1529,19 @@ export default function AppClient() {
           )}
           {settingsTab === "about" && (
             <div className="panel active">
+              <div className="dev-card">
+                <div className="dev-avatar" aria-hidden="true">AM</div>
+                <div>
+                  <p className="dev-kicker">Built and developed by</p>
+                  <h3 className="dev-name">Abhishek Mishra</h3>
+                  <p className="dev-role">Author · Developer</p>
+                  <p className="dev-blurb">
+                    This Agentic AI app — chat, tools, voice, and camera — was designed and built by Abhishek Mishra.
+                  </p>
+                </div>
+              </div>
               <dl className="about-grid">
-                <dt>About me</dt>
+                <dt>Author</dt>
                 <dd>Abhishek Mishra</dd>
                 <dt>Version</dt>
                 <dd>Agentic {appState.version || "1.5.0"}</dd>

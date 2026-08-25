@@ -765,6 +765,56 @@
     }
     .install { background: var(--orange); color: #fff; }
     .remove { background: #eee7dc; color: #8a331c; }
+    .dev-card {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: #fff8f3;
+      border: 1px solid #efd2c4;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+    .dev-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      background: #8a331c;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+    .dev-kicker {
+      margin: 0 0 4px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8a331c;
+    }
+    .dev-name {
+      margin: 0;
+      font-family: var(--font-newsreader), Newsreader, Georgia, serif;
+      font-size: 22px;
+      font-weight: 450;
+      letter-spacing: -0.02em;
+    }
+    .dev-role {
+      margin: 2px 0 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .dev-blurb {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--ink);
+    }
     .about-grid {
       display: grid;
       grid-template-columns: 140px 1fr;

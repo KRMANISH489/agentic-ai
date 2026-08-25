@@ -511,6 +511,39 @@
     }
     .install { background: var(--orange); color: #fff; }
     .remove { background: #eee7dc; color: #8a331c; }
+    .dev-card {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: #fff8f3;
+      border: 1px solid #efd2c4;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+    .dev-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      background: #8a331c;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 650;
+    }
+    .dev-kicker {
+      margin: 0 0 4px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8a331c;
+    }
+    .dev-name { margin: 0; font-size: 22px; font-weight: 450; }
+    .dev-role { margin: 2px 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+    .dev-blurb { margin: 0; font-size: 13px; line-height: 1.5; }
     .about-grid {
       display: grid;
       grid-template-columns: 140px 1fr;
@@ -1104,8 +1137,17 @@
       `;
 
       document.getElementById("tab-about").innerHTML = `
+        <div class="dev-card">
+          <div class="dev-avatar" aria-hidden="true">AM</div>
+          <div>
+            <p class="dev-kicker">Built and developed by</p>
+            <h3 class="dev-name">Abhishek Mishra</h3>
+            <p class="dev-role">Author · Developer</p>
+            <p class="dev-blurb">This Agentic AI app — chat, tools, voice, and camera — was designed and built by Abhishek Mishra.</p>
+          </div>
+        </div>
         <dl class="about-grid">
-          <dt>About me</dt><dd>Abhishek Mishra</dd>
+          <dt>Author</dt><dd>Abhishek Mishra</dd>
           <dt>Version</dt><dd>Agentic ${appState.version || "1.5.0"}</dd>
           <dt>Provider</dt><dd>${appState.provider || "not connected"}</dd>
           <dt>Model</dt><dd>${appState.model || "—"}</dd>
