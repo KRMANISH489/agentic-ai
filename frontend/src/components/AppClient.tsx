@@ -36,6 +36,31 @@ function html(text: string) {
   return marked.parse(text, { async: false }) as string;
 }
 
+type PendingPhoto = { id: string; name: string; dataUrl: string };
+
+async function fileToJpeg(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Could not read that photo."));
+      el.src = url;
+    });
+    const max = 1280;
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not process that photo.");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function speakable(text: string) {
   return text
     .replace(/```[\s\S]*?```/g, " ")
@@ -155,6 +180,7 @@ type Bubble = {
   role: "user" | "agent";
   html: string;
   text?: string;
+  images?: string[];
   trace?: string;
   error?: boolean;
   thinking?: boolean;
@@ -199,6 +225,9 @@ export default function AppClient() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [voiceHint, setVoiceHint] = useState("");
   const [navOpen, setNavOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -206,6 +235,10 @@ export default function AppClient() {
   const skipAutoSendRef = useRef(false);
   const voiceBaseRef = useRef("");
   const voiceFinalRef = useRef("");
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraFileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     try {
@@ -242,9 +275,10 @@ export default function AppClient() {
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const el = e.target as HTMLElement | null;
-      if (el?.closest(".mode-picker") || el?.closest(".user-dock")) return;
+      if (el?.closest(".mode-picker") || el?.closest(".user-dock") || el?.closest(".attach-picker")) return;
       setModeOpen(false);
       setUserOpen(false);
+      setAttachOpen(false);
     }
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
@@ -256,6 +290,8 @@ export default function AppClient() {
         setNavOpen(false);
         setSettingsOpen(false);
         setHelpOpen(false);
+        setAttachOpen(false);
+        closeCamera();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") {
         e.preventDefault();
@@ -276,9 +312,16 @@ export default function AppClient() {
   }, [editingId]);
 
   useEffect(() => {
+    if (cameraOpen && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraOpen]);
+
+  useEffect(() => {
     return () => {
       recRef.current?.abort();
       window.speechSynthesis?.cancel();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -423,12 +466,14 @@ export default function AppClient() {
     item: ChatItem,
     copy: ChatItem[],
     resetBubbles?: Bubble[],
-    resetMemory = false
+    resetMemory = false,
+    images: string[] = []
   ) {
+    const stored = images.length ? `${message}\n[Photo attached]` : message;
     const nextItem: ChatItem = {
       ...item,
       updatedAt: Date.now(),
-      messages: [...history, { role: "user", content: message }],
+      messages: [...history, { role: "user", content: stored }],
     };
     setChats(copy.map((c) => (c.id === nextItem.id ? nextItem : c)));
     const agentId = crypto.randomUUID();
@@ -437,6 +482,7 @@ export default function AppClient() {
       role: "user",
       html: html(message),
       text: message,
+      images: images.length ? images : undefined,
     };
     const agentBubble: Bubble = {
       id: agentId,
@@ -456,7 +502,7 @@ export default function AppClient() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, mode, history }),
+        body: JSON.stringify({ message, mode, history, images }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -534,13 +580,87 @@ export default function AppClient() {
     window.speechSynthesis?.cancel();
     setSpeakingId(null);
     const message = (spoken ?? input).trim();
-    if (!message || sending) return;
+    if ((!message && !pendingPhotos.length) || sending) return;
+    const photos = pendingPhotos.map((p) => p.dataUrl);
+    const caption = message || (photos.length > 1 ? "What is in these photos?" : "What is in this photo?");
     setEditingId(null);
     setInput("");
+    setPendingPhotos([]);
+    setAttachOpen(false);
     if (inputRef.current) inputRef.current.style.height = "auto";
-    const { item, copy } = ensureChat(message, chats);
+    const { item, copy } = ensureChat(caption, chats);
     const history = item.messages.map((m) => ({ role: m.role, content: m.content }));
-    await runChatTurn(message, history, item, copy);
+    await runChatTurn(caption, history, item, copy, undefined, false, photos);
+  }
+
+  function closeCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setCameraOpen(false);
+  }
+
+  async function addPhotoFiles(files: FileList | File[]) {
+    const list = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (!list.length) return;
+    const room = Math.max(0, 4 - pendingPhotos.length);
+    if (!room) {
+      setVoiceHint("You can attach up to 4 photos.");
+      return;
+    }
+    try {
+      const next: PendingPhoto[] = [];
+      for (const file of list.slice(0, room)) {
+        next.push({
+          id: crypto.randomUUID(),
+          name: file.name || "photo.jpg",
+          dataUrl: await fileToJpeg(file),
+        });
+      }
+      setPendingPhotos((prev) => [...prev, ...next].slice(0, 4));
+      setVoiceHint("");
+    } catch (err) {
+      setVoiceHint(err instanceof Error ? err.message : "Could not add that photo.");
+    }
+  }
+
+  async function openCamera() {
+    setAttachOpen(false);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraFileRef.current?.click();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraOpen(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      });
+    } catch {
+      cameraFileRef.current?.click();
+    }
+  }
+
+  function snapPhoto() {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    const max = 1280;
+    const scale = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    closeCamera();
+    setPendingPhotos((prev) => {
+      if (prev.length >= 4) return prev;
+      return [...prev, { id: crypto.randomUUID(), name: "camera.jpg", dataUrl }];
+    });
   }
 
   function speechLang() {
@@ -1088,7 +1208,14 @@ export default function AppClient() {
                       </div>
                     ) : (
                       <div key={b.id} className="msg-user-wrap">
-                        <div className="msg user" dangerouslySetInnerHTML={{ __html: b.html }} />
+                        {b.images?.length ? (
+                          <div className="msg-photos">
+                            {b.images.map((src, i) => (
+                              <img key={`${b.id}-img-${i}`} src={src} alt="" />
+                            ))}
+                          </div>
+                        ) : null}
+                        {b.text?.trim() ? <div className="msg user" dangerouslySetInnerHTML={{ __html: b.html }} /> : null}
                         <div className="msg-actions">
                           <button
                             type="button"
@@ -1142,12 +1269,82 @@ export default function AppClient() {
             </div>
           </div>
           <div className="composer-wrap">
+            {pendingPhotos.length ? (
+              <div className="attach-previews">
+                {pendingPhotos.map((photo) => (
+                  <div className="attach-preview" key={photo.id}>
+                    <img src={photo.dataUrl} alt="" />
+                    <button
+                      type="button"
+                      aria-label="Remove photo"
+                      onClick={() => setPendingPhotos((prev) => prev.filter((p) => p.id !== photo.id))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <form className="composer" onSubmit={sendMessage}>
+              <div className={`attach-picker ${attachOpen ? "open" : ""}`}>
+                <button
+                  className="attach-btn"
+                  type="button"
+                  aria-label="Add photo"
+                  aria-expanded={attachOpen}
+                  disabled={sending}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAttachOpen((v) => !v);
+                    setModeOpen(false);
+                    setUserOpen(false);
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+                <div className="attach-menu">
+                  <button type="button" onClick={() => void openCamera()}>
+                    Take photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachOpen(false);
+                      galleryRef.current?.click();
+                    }}
+                  >
+                    Choose from gallery
+                  </button>
+                </div>
+              </div>
+              <input
+                ref={galleryRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) void addPhotoFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <input
+                ref={cameraFileRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) void addPhotoFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
               <textarea
                 ref={inputRef}
-                placeholder={listening ? "Listening…" : "How can I help you today?"}
+                placeholder={listening ? "Listening…" : pendingPhotos.length ? "Add a caption…" : "How can I help you today?"}
                 rows={1}
-                required
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
@@ -1169,7 +1366,7 @@ export default function AppClient() {
                   <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v3" />
                 </svg>
               </button>
-              <button className="send-btn" type="submit" aria-label="Send" disabled={sending}>
+              <button className="send-btn" type="submit" aria-label="Send" disabled={sending || (!input.trim() && !pendingPhotos.length)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                   <path d="M12 19V5M5 12l7-7 7 7" />
                 </svg>
@@ -1179,6 +1376,16 @@ export default function AppClient() {
             
           </div>
         </section>
+      </div>
+
+      <div className={`camera-overlay ${cameraOpen ? "open" : ""}`}>
+        <video ref={videoRef} autoPlay playsInline muted />
+        <div className="camera-bar">
+          <button type="button" className="camera-cancel" onClick={closeCamera}>
+            Cancel
+          </button>
+          <button type="button" className="camera-snap" aria-label="Capture photo" onClick={snapPhoto} />
+        </div>
       </div>
 
       <div className={`overlay ${settingsOpen ? "open" : ""}`} onClick={(e) => e.target === e.currentTarget && setSettingsOpen(false)}>

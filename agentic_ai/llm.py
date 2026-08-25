@@ -22,9 +22,10 @@ class LLM:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.2,
+        model: str | None = None,
     ) -> Any:
         kwargs: dict[str, Any] = {
-            "model": self.settings.model,
+            "model": model or self.settings.model,
             "messages": messages,
             "temperature": temperature,
         }

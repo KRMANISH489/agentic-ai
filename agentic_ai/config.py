@@ -17,6 +17,7 @@ load_dotenv(ENV_PATH)
 class Settings:
     provider: str
     model: str
+    vision_model: str
     api_key: str
     base_url: str | None
     max_steps: int
@@ -56,6 +57,14 @@ def load_settings() -> Settings:
 
     spec = _PROVIDERS[provider]
     model = os.getenv("LLM_MODEL") or spec["default_model"]
+    vision_model = os.getenv("VISION_MODEL", "").strip()
+    if not vision_model:
+        if provider == "groq":
+            vision_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+        elif provider in {"openai", "openrouter"}:
+            vision_model = "gpt-4o-mini"
+        else:
+            vision_model = model
     api_key = "ollama"
     if spec["key_env"]:
         api_key = os.getenv(spec["key_env"], "").strip()
@@ -67,6 +76,7 @@ def load_settings() -> Settings:
     return Settings(
         provider=provider,
         model=model,
+        vision_model=vision_model,
         api_key=api_key,
         base_url=spec["base_url"],
         max_steps=int(os.getenv("MAX_STEPS", "8")),

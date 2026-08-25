@@ -60,9 +60,10 @@ class Crew:
         self.researcher.apply_user(user, RESEARCHER_PROMPT)
         self.writer.apply_user(user, WRITER_PROMPT)
 
-    def run(self, goal: str) -> str:
+    def run(self, goal: str, images: list[str] | None = None) -> str:
         brief = self.researcher.ask(
-            f"Research this request thoroughly and return a brief:\n\n{goal}"
+            f"Research this request thoroughly and return a brief:\n\n{goal}",
+            images=images,
         )
         return self.writer.ask(
             f"User request:\n{goal}\n\nResearch brief:\n{brief}\n\nWrite the final answer."

@@ -72,9 +72,23 @@ class Agent:
         self.temperature = float(prefs.get("temperature") or 0.2)
         self.on_trace = on_trace or (lambda _: None)
 
-    def ask(self, user_message: str) -> str:
-        self.memory.add("user", user_message)
+    def ask(self, user_message: str, images: list[str] | None = None) -> str:
+        text = (user_message or "").strip() or "Describe this image and answer any question about it."
+        safe_images = [
+            url
+            for url in (images or [])[:4]
+            if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
+        ]
+        if safe_images:
+            parts: list[dict[str, Any]] = [{"type": "text", "text": text}]
+            for url in safe_images:
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+            self.memory.messages.append({"role": "user", "content": parts})
+        else:
+            self.memory.add("user", text)
         schemas = self.tools.schemas()
+        model = self.llm.settings.vision_model if safe_images else None
+        dropped_tools = False
 
         for step in range(1, self.max_steps + 1):
             self.on_trace(f"thinking:{step}")
@@ -83,8 +97,13 @@ class Agent:
                     self.memory.messages,
                     tools=schemas or None,
                     temperature=self.temperature,
+                    model=model,
                 )
             except APIStatusError as exc:
+                if safe_images and schemas and not dropped_tools:
+                    dropped_tools = True
+                    schemas = []
+                    continue
                 if not self._recover_bad_tool_call(exc):
                     raise
                 continue
@@ -188,6 +207,16 @@ def _last_user_text(messages: list[dict[str, Any]]) -> str:
         if message.get("role") != "user":
             continue
         content = message.get("content")
+        if isinstance(content, list):
+            bits = [
+                str(part.get("text") or "").strip()
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "text"
+            ]
+            joined = " ".join(bit for bit in bits if bit)
+            if joined and not joined.startswith("Do not reply"):
+                return joined
+            continue
         if isinstance(content, str) and content.strip() and not content.startswith("Do not reply"):
             return content.strip()
     return ""

@@ -73,6 +73,7 @@ class ChatRequest(BaseModel):
     message: str
     mode: str = "agent"
     history: list[HistoryTurn] = []
+    images: list[str] = []
 
 
 class SetupRequest(BaseModel):
@@ -372,9 +373,22 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
                 if req.mode == "crew" and _crew is not None:
                     _crew.researcher.load_transcript(transcript)
                     _crew.writer.reset()
+                    photos = [
+                        url
+                        for url in req.images[:4]
+                        if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
+                    ]
+                    answer = _crew.run(req.message.strip(), images=photos or None)
                 elif _agent is not None:
                     _agent.load_transcript(transcript)
-                answer = runner(req.message.strip())
+                    photos = [
+                        url
+                        for url in req.images[:4]
+                        if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
+                    ]
+                    answer = _agent.ask(req.message.strip(), images=photos or None)
+                else:
+                    answer = runner(req.message.strip())
             events.put({"type": "answer", "content": answer})
         except Exception as exc:
             events.put({"type": "error", "content": str(exc)})
