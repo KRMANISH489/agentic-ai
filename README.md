@@ -83,7 +83,7 @@ Live deploy: **Vercel alone cannot run this app** (Next.js + Python FastAPI). Us
 
 Hugging Face Spaces (Docker, `app_port` 3000) bhi free hai.
 
-Vercel par `ERR_TOO_MANY_REDIRECTS` tab aata hai jab `FRONTEND_URL` khali/`/` ho: API khud ko `/` par redirect karti rehti hai. Vercel Settings → Environment Variables se empty `FRONTEND_URL` hatao, ya Root Directory `frontend` set karo (UI chalega, chat API nahi — FastAPI Vercel pe nahi chalti).
+Vercel pe build fail ho to: **Settings → General → Root Directory** = `frontend`. Install/Build Override **off**. Phir Redeploy. Chat API Vercel pe nahi chalegi — FastAPI ke liye Render Docker use karo.
 
 CLI:
 
