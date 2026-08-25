@@ -6,7 +6,7 @@ import queue
 import threading
 import webbrowser
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -107,7 +107,12 @@ class OAuthKeys(BaseModel):
 
 
 def frontend_origin() -> str:
-    return os.getenv("FRONTEND_URL", "http://127.0.0.1:3000").rstrip("/")
+    raw = (os.getenv("FRONTEND_URL") or "").strip().rstrip("/")
+    if not raw or raw == "/":
+        raw = (os.getenv("AUTH_BASE_URL") or "http://127.0.0.1:3000").strip().rstrip("/")
+    if not raw or raw == "/":
+        raw = "http://127.0.0.1:3000"
+    return raw
 
 
 def _oauth_fail(message: str) -> RedirectResponse:
@@ -166,8 +171,22 @@ def _get_runner(mode: str, on_trace, user: dict | None = None):
 
 
 @app.get("/")
-def index() -> RedirectResponse:
-    return RedirectResponse(frontend_origin() + "/", status_code=302)
+def index(request: Request):
+    dest = frontend_origin() + "/"
+    parsed = urlparse(dest)
+    here = (request.url.hostname or "").lower()
+    dest_host = (parsed.hostname or "").lower()
+    # Empty FRONTEND_URL used to redirect to "/" and loop (ERR_TOO_MANY_REDIRECTS on Vercel).
+    if dest in {"/", ""} or parsed.path in {"", "/"} and (not dest_host or dest_host == here):
+        return JSONResponse(
+            {
+                "ok": True,
+                "app": "Agentic AI",
+                "version": APP_VERSION,
+                "hint": "API is running. This app needs the Next.js UI plus FastAPI. Vercel cannot run both. Use Render Docker (free) or set FRONTEND_URL to a different UI host.",
+            }
+        )
+    return RedirectResponse(dest, status_code=302)
 
 
 @app.get("/favicon.ico")

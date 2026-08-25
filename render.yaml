@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: agentic-ai
+    healthCheckPath: /
+    envVars:
+      - key: OPEN_BROWSER
+        value: "0"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

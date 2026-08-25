@@ -74,9 +74,16 @@ Open **http://127.0.0.1:3000** (Google login ke liye `127.0.0.1` use karo, `loca
 
 Features: login, chat, tools, edit a sent message, voice in/out.
 
-Live deploy: repo mein `Dockerfile` hai. Railway / Render / any Docker host par `GROQ_API_KEY`, `SESSION_SECRET`, `FRONTEND_URL`, aur `AUTH_BASE_URL` set karo. Public URL ke OAuth callback:
+Live deploy: **Vercel alone cannot run this app** (Next.js + Python FastAPI). Use a free Docker host instead:
 
-`https://YOUR-DOMAIN/auth/google/callback`
+1. Open [Render](https://render.com) → New → Web Service → connect `KRMANISH489/agentic-ai`
+2. Runtime: **Docker**
+3. Add env `GROQ_API_KEY` (from [console.groq.com/keys](https://console.groq.com/keys))
+4. Deploy — public URL Render khud set karega (`RENDER_EXTERNAL_URL`)
+
+Hugging Face Spaces (Docker, `app_port` 3000) bhi free hai.
+
+Vercel par `ERR_TOO_MANY_REDIRECTS` tab aata hai jab `FRONTEND_URL` khali/`/` ho: API khud ko `/` par redirect karti rehti hai. Vercel Settings → Environment Variables se empty `FRONTEND_URL` hatao, ya Root Directory `frontend` set karo (UI chalega, chat API nahi — FastAPI Vercel pe nahi chalti).
 
 CLI:
 
