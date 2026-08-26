@@ -495,10 +495,11 @@
       background: #eee7dc;
       color: var(--ink);
       border-radius: 8px;
-      padding: 4px 10px;
+      padding: 6px 12px;
       font: 600 12px Inter, sans-serif;
       cursor: pointer;
       flex-shrink: 0;
+      min-height: 32px;
     }
     .copy-code:hover { background: #fff; }
     .code-block pre {
@@ -715,9 +716,21 @@
     }
     .msg-actions.agent-actions {
       justify-content: flex-start;
-      margin-top: 4px;
-      opacity: 0.7;
+      margin-top: 8px;
+      opacity: 1;
+      gap: 8px;
+      align-items: center;
     }
+    .copy-reply {
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font: 600 12px Inter, sans-serif;
+      cursor: pointer;
+    }
+    .copy-reply:hover { background: #fff8f3; border-color: #e0c4b4; }
     .msg.agent:hover .msg-actions.agent-actions,
     .msg.agent:focus-within .msg-actions.agent-actions {
       opacity: 1;

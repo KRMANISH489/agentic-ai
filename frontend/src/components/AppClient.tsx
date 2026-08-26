@@ -40,18 +40,48 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
+function wrapCodeBlocks(markup: string) {
+  if (markup.includes("class=\"code-block\"") || markup.includes("class='code-block'")) return markup;
+  return markup.replace(/<pre>([\s\S]*?)<\/pre>/gi, (_all, inner: string) => {
+    return `<div class="code-block"><div class="code-bar"><span>code</span><button type="button" class="copy-code">Copy</button></div><pre>${inner}</pre></div>`;
+  });
+}
+
 function html(text: string) {
   const renderer = new marked.Renderer();
   renderer.code = ({ text: code, lang }: Tokens.Code) => {
     const language = (lang || "").trim().split(/\s+/)[0] || "code";
     return `<div class="code-block"><div class="code-bar"><span>${escapeHtml(language)}</span><button type="button" class="copy-code">Copy</button></div><pre><code>${escapeHtml(code)}</code></pre></div>`;
   };
-  return marked.parse(text, {
+  const markup = marked.parse(text, {
     async: false,
     gfm: true,
     breaks: true,
     renderer,
   }) as string;
+  return wrapCodeBlocks(markup);
+}
+
+function codeFromReply(text: string) {
+  const blocks = [...text.matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((match) => match[1].replace(/\s+$/, ""));
+  if (blocks.length) return blocks.join("\n\n");
+  return text.trim();
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.setAttribute("readonly", "");
+    field.style.position = "fixed";
+    field.style.left = "-9999px";
+    document.body.appendChild(field);
+    field.select();
+    document.execCommand("copy");
+    field.remove();
+  }
 }
 
 type PendingPhoto = { id: string; name: string; dataUrl: string };
@@ -246,6 +276,7 @@ export default function AppClient() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -850,15 +881,25 @@ export default function AppClient() {
   function onChatClick(e: ReactMouseEvent<HTMLDivElement>) {
     const btn = (e.target as HTMLElement).closest(".copy-code");
     if (!(btn instanceof HTMLButtonElement)) return;
-    const code = btn.closest(".code-block")?.querySelector("code");
+    e.preventDefault();
+    const code = btn.closest(".code-block")?.querySelector("code") || btn.closest(".code-block")?.querySelector("pre");
     if (!code) return;
-    const text = code.textContent || "";
-    void navigator.clipboard.writeText(text).then(() => {
+    const text = (code.textContent || "").trim();
+    if (!text) return;
+    void copyText(text).then(() => {
       btn.textContent = "Copied";
       window.setTimeout(() => {
         if (btn.isConnected) btn.textContent = "Copy";
       }, 1400);
     });
+  }
+
+  async function copyReply(id: string, text?: string) {
+    const source = (text || "").trim();
+    if (!source) return;
+    await copyText(codeFromReply(source));
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1400);
   }
 
   async function savePref(updates: Record<string, unknown>) {
@@ -1277,6 +1318,13 @@ export default function AppClient() {
                         <div className="md" dangerouslySetInnerHTML={{ __html: b.html }} />
                         {!b.thinking && !b.error && b.text ? (
                           <div className="msg-actions agent-actions">
+                            <button
+                              type="button"
+                              className="copy-reply"
+                              onClick={() => void copyReply(b.id, b.text)}
+                            >
+                              {copiedId === b.id ? "Copied" : "Copy code"}
+                            </button>
                             <button
                               type="button"
                               className={`msg-action ${speakingId === b.id ? "on" : ""}`}
