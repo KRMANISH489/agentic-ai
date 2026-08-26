@@ -1,15 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Newsreader } from "next/font/google";
+import { Outfit, Syne } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-outfit",
 });
 
-const newsreader = Newsreader({
+const syne = Syne({
   subsets: ["latin"],
-  variable: "--font-newsreader",
+  variable: "--font-syne",
 });
 
 export const viewport: Viewport = {
@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "Agentic",
-  description: "Agentic AI chat",
+  description: "Jump in. Agentic AI by Abhishek Mishra.",
   icons: { icon: "/favicon.svg" },
 };
 
@@ -31,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${newsreader.variable}`}>{children}</body>
+      <body className={`${outfit.variable} ${syne.variable}`}>{children}</body>
     </html>
   );
 }

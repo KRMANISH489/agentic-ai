@@ -955,8 +955,8 @@ export default function AppClient() {
         <div className="login-wall">
           <div className="login-card">
             <Logo large />
-            <h2>Welcome to Agentic</h2>
-            <p>Sign in to continue. Your profile will appear in the sidebar.</p>
+            <h2>Jump in</h2>
+            <p>Your robot is ready. Sign in to start chatting.</p>
             <form className="login-form" onSubmit={localLogin}>
               <label htmlFor="loginName">Name</label>
               <input
@@ -1086,13 +1086,16 @@ export default function AppClient() {
         <aside className="sidebar">
           <div className="brand">
             <Logo />
-            <h1>Agentic</h1>
+            <div className="brand-text">
+              <h1>Agentic</h1>
+              <span className="brand-tag">Leap v2</span>
+            </div>
             <button className="sidebar-close" type="button" aria-label="Close menu" onClick={() => setNavOpen(false)}>
               ×
             </button>
           </div>
           <button className="new-chat" type="button" onClick={() => void newChat()}>
-            + New chat
+            + New leap
           </button>
           <div className={`mode-picker ${modeOpen ? "open" : ""}`}>
             <button
@@ -1245,7 +1248,8 @@ export default function AppClient() {
               {!bubbles.length && (
                 <div className="empty">
                   <Logo large twinkle />
-                  <h2>How can I help you today{user?.name ? `, ${user.name.trim().split(/\s+/)[0]}` : ""}?</h2>
+                  <h2>Ready to leap{user?.name ? `, ${user.name.trim().split(/\s+/)[0]}` : ""}?</h2>
+                  <p>Ask, plan, or drop a photo. The robot jumps in with you.</p>
                 </div>
               )}
               <div className="chat" onClick={onChatClick}>
@@ -1427,7 +1431,7 @@ export default function AppClient() {
               />
               <textarea
                 ref={inputRef}
-                placeholder={listening ? "Listening…" : pendingPhotos.length ? "Add a caption…" : "How can I help you today?"}
+                placeholder={listening ? "Listening…" : pendingPhotos.length ? "Add a caption…" : "What’s the mission?"}
                 rows={1}
                 value={input}
                 onChange={(e) => {
@@ -1628,7 +1632,7 @@ export default function AppClient() {
                 <dt>Author</dt>
                 <dd>Abhishek Mishra</dd>
                 <dt>Version</dt>
-                <dd>Agentic {appState.version || "1.5.0"}</dd>
+                <dd>Agentic {appState.version || "1.6.0"}</dd>
                 <dt>Provider</dt>
                 <dd>{appState.provider || "not connected"}</dd>
                 <dt>Model</dt>
