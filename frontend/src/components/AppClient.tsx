@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { marked } from "marked";
+import { FormEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
+import { marked, type Tokens } from "marked";
 import { Logo } from "@/components/Logo";
 import type { AppState, ChatItem, ChatMessage, ToolItem, User } from "@/lib/types";
 
@@ -32,8 +32,26 @@ function friendlyStatus(text: string) {
   return "Thinking…";
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function html(text: string) {
-  return marked.parse(text, { async: false }) as string;
+  const renderer = new marked.Renderer();
+  renderer.code = ({ text: code, lang }: Tokens.Code) => {
+    const language = (lang || "").trim().split(/\s+/)[0] || "code";
+    return `<div class="code-block"><div class="code-bar"><span>${escapeHtml(language)}</span><button type="button" class="copy-code">Copy</button></div><pre><code>${escapeHtml(code)}</code></pre></div>`;
+  };
+  return marked.parse(text, {
+    async: false,
+    gfm: true,
+    breaks: true,
+    renderer,
+  }) as string;
 }
 
 type PendingPhoto = { id: string; name: string; dataUrl: string };
@@ -829,6 +847,20 @@ export default function AppClient() {
     }
   }
 
+  function onChatClick(e: ReactMouseEvent<HTMLDivElement>) {
+    const btn = (e.target as HTMLElement).closest(".copy-code");
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const code = btn.closest(".code-block")?.querySelector("code");
+    if (!code) return;
+    const text = code.textContent || "";
+    void navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = "Copied";
+      window.setTimeout(() => {
+        if (btn.isConnected) btn.textContent = "Copy";
+      }, 1400);
+    });
+  }
+
   async function savePref(updates: Record<string, unknown>) {
     const res = await fetch("/api/settings", {
       method: "POST",
@@ -1175,7 +1207,7 @@ export default function AppClient() {
                   <h2>How can I help you today{user?.name ? `, ${user.name.trim().split(/\s+/)[0]}` : ""}?</h2>
                 </div>
               )}
-              <div className="chat">
+              <div className="chat" onClick={onChatClick}>
                 {bubbles.map((b) =>
                   b.role === "user" ? (
                     editingId === b.id ? (
@@ -1240,7 +1272,7 @@ export default function AppClient() {
                   ) : (
                     <div key={b.id} className={`msg agent ${b.error ? "error" : ""}`}>
                       <Logo thinking={b.thinking} />
-                      <div>
+                      <div className="msg-body">
                         {b.trace ? <div className="trace">{b.trace}</div> : null}
                         <div className="md" dangerouslySetInnerHTML={{ __html: b.html }} />
                         {!b.thinking && !b.error && b.text ? (

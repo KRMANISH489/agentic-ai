@@ -23,6 +23,7 @@
       height: 100%;
       height: 100dvh;
       overflow: hidden;
+      max-width: 100%;
     }
     .topbar, .nav-backdrop, .sidebar-close { display: none; }
     .shell {
@@ -30,6 +31,8 @@
       grid-template-columns: 260px 1fr;
       height: 100%;
       overflow: hidden;
+      min-width: 0;
+      max-width: 100%;
     }
     .sidebar {
       background: var(--paper-2);
@@ -271,13 +274,17 @@
     .stage {
       flex: 1;
       min-height: 0;
+      min-width: 0;
+      overflow-x: hidden;
       overflow-y: auto;
       padding: 28px 24px 12px;
     }
     .stage-inner {
       max-width: 720px;
+      width: 100%;
       margin: 0 auto;
       min-height: 100%;
+      min-width: 0;
       display: flex;
       flex-direction: column;
     }
@@ -338,21 +345,26 @@
       flex-direction: column;
       gap: 22px;
       padding-bottom: 16px;
+      min-width: 0;
+      max-width: 100%;
     }
-    .msg { max-width: 100%; }
+    .msg { max-width: 100%; min-width: 0; }
     .msg-user-wrap {
       align-self: flex-end;
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      max-width: 78%;
+      max-width: min(78%, 100%);
       gap: 4px;
+      min-width: 0;
     }
     .msg.user {
       background: var(--user-bg);
       border-radius: 18px;
       padding: 12px 16px;
       max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .msg-actions {
       display: flex;
@@ -429,17 +441,80 @@
     .msg-edit-save:disabled { opacity: 0.45; cursor: not-allowed; }
     .msg.agent {
       display: grid;
-      grid-template-columns: 28px 1fr;
+      grid-template-columns: 28px minmax(0, 1fr);
       gap: 12px;
       align-items: start;
+      min-width: 0;
+      max-width: 100%;
     }
     .msg.agent .logo {
       margin-top: 2px;
     }
-    .md { line-height: 1.7; }
+    .msg-body {
+      min-width: 0;
+      max-width: 100%;
+    }
+    .md {
+      line-height: 1.7;
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .md p { margin: 0 0 10px; }
     .md p:last-child { margin-bottom: 0; }
     .md ul, .md ol { margin: 0 0 10px; padding-left: 20px; }
+    .md :not(pre) > code {
+      background: #f4ece4;
+      border-radius: 6px;
+      padding: 0.1em 0.35em;
+      font-size: 0.9em;
+      word-break: break-all;
+    }
+    .code-block {
+      margin: 0 0 12px;
+      max-width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #241e18;
+      overflow: hidden;
+    }
+    .code-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #2f2820;
+      color: #d7cfc3;
+      font-size: 12px;
+    }
+    .copy-code {
+      border: 0;
+      background: #eee7dc;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font: 600 12px Inter, sans-serif;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .copy-code:hover { background: #fff; }
+    .code-block pre {
+      margin: 0;
+      padding: 12px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      max-width: 100%;
+    }
+    .code-block code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #f4ece4;
+      white-space: pre;
+    }
     .trace {
       color: var(--muted);
       font-size: 13px;
@@ -1118,7 +1193,7 @@
         cursor: pointer;
         border-radius: 8px;
       }
-      .stage { padding: 16px 14px 10px; }
+      .stage { padding: 16px 14px 10px; overflow-x: hidden; }
       .empty h2 { font-size: 26px; padding: 0 8px; }
       .logo-lg { width: 56px; height: 56px; }
       .logo-lg .logo-3d { width: 42px; height: 42px; }
@@ -1127,7 +1202,18 @@
         padding-bottom: max(12px, env(safe-area-inset-bottom));
       }
       .composer { padding: 8px 8px 8px 14px; border-radius: 18px; }
-      .msg-user-wrap, .msg-edit { max-width: 92%; width: 92%; }
+      .msg-user-wrap, .msg-edit {
+        max-width: 100%;
+        width: 100%;
+        align-self: stretch;
+      }
+      .msg.user, .msg-edit { overflow-wrap: anywhere; word-break: break-word; }
+      .msg-photos img {
+        width: min(140px, 42vw);
+        height: auto;
+        max-width: 100%;
+      }
+      .code-block code { font-size: 12px; }
       .setup-row { flex-direction: column; }
       .setup-row button { width: 100%; }
       .overlay {
