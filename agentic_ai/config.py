@@ -46,6 +46,16 @@ _PROVIDERS = {
     },
 }
 
+# Groq retired Llama 4 Scout (404 model_not_found). Current vision models:
+# https://console.groq.com/docs/vision
+DEFAULT_GROQ_VISION = "qwen/qwen3.6-27b"
+_DEPRECATED_GROQ_VISION = {
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "llama-3.2-11b-vision-preview",
+    "llama-3.2-90b-vision-preview",
+}
+
 
 def load_settings() -> Settings:
     load_dotenv(ENV_PATH, override=True)
@@ -58,10 +68,11 @@ def load_settings() -> Settings:
     spec = _PROVIDERS[provider]
     model = os.getenv("LLM_MODEL") or spec["default_model"]
     vision_model = os.getenv("VISION_MODEL", "").strip()
-    if not vision_model:
-        if provider == "groq":
-            vision_model = "meta-llama/llama-4-scout-17b-16e-instruct"
-        elif provider in {"openai", "openrouter"}:
+    if provider == "groq":
+        if not vision_model or vision_model in _DEPRECATED_GROQ_VISION:
+            vision_model = DEFAULT_GROQ_VISION
+    elif not vision_model:
+        if provider in {"openai", "openrouter"}:
             vision_model = "gpt-4o-mini"
         else:
             vision_model = model

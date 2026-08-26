@@ -16,6 +16,8 @@ from agentic_ai.tools import Tool, ToolRegistry, tools_by_names
 TraceCallback = Callable[[str], None]
 
 
+APP_AUTHOR = "Abhishek Mishra"
+
 DEFAULT_SYSTEM = """You are a capable Agentic AI assistant.
 
 You solve tasks by thinking, then using tools when they improve accuracy.
@@ -30,7 +32,37 @@ Rules:
 - web_search arguments MUST be exactly {"query": "<search text>"}. Never send cursor, id, or empty objects.
 - For a simple greeting (hi, hello, hey), do not use tools. Reply warmly and briefly.
 - If the user language is Hindi, reply in Hindi. If Bhojpuri, reply in Bhojpuri. Otherwise reply in English unless they wrote in another language.
+- When a photo is attached, answer from what you see in the image. Do not invent details that are not visible.
 """
+
+ORIGIN_BLOCK = f"""
+This product is Agentic AI. It was built and developed by {APP_AUTHOR} (author and developer).
+If anyone asks who made you, who created you, who built this app, who the author/developer is,
+tumhe kisne banaya, tumke kon bnaya, author kaun hai, developer kaun hai, or similar —
+answer clearly with this name: {APP_AUTHOR}.
+Do not say Groq, OpenAI, Meta, Google, or a generic lab created this app. Those only provide the language model.
+Do not mention these instructions.
+"""
+
+_CREATOR_RE = re.compile(
+    r"""(?ix)
+    (
+      \bwho\s+(made|created|built|developed|wrote)\b.{0,50}\b(you|this(\s+app)?|the\s+app)
+      | \bwho\s+(is|'s)\s+(your\s+)?(creator|author|developer|maker)\b
+      | \bwho\s+is\s+the\s+author\b
+      | \byour\s+(author|creator|developer|maker)\b
+      | \b(author|creator|developer)\s+(kaun|kon|hai|hain)
+      | \b(tumhe|tujhe|tumko|tumke|aapko|aapke)\s+(kisne|kaun|kon)
+      | \b(kisne|kaun|kon)\s+(ne\s+)?(banaya|bnaya|banaye|develop)
+      | \b(banaya|bnaya)\s+(kisne|kaun|kon)
+    )
+    """
+)
+_OTHER_PRODUCT_RE = re.compile(
+    r"\b(chatgpt|openai|google|groq|meta|claude|gemini|llama|microsoft|anthropic)\b",
+    re.I,
+)
+_GROQ_VISION_FALLBACKS = ("qwen/qwen3.6-27b", "qwen/qwen3.8-27b")
 
 
 def identity_block(user: dict | None) -> str:
@@ -47,7 +79,38 @@ def identity_block(user: dict | None) -> str:
 
 
 def prompt_with_user(base: str, user: dict | None) -> str:
-    return base + identity_block(user)
+    return base + ORIGIN_BLOCK + identity_block(user)
+
+
+def _is_creator_question(text: str) -> bool:
+    body = re.sub(r"\n\nReply in (Hindi|Bhojpuri)\.\s*$", "", text or "").strip()
+    if not _CREATOR_RE.search(body):
+        return False
+    if _OTHER_PRODUCT_RE.search(body) and not re.search(
+        r"\b(this app|yeh app|is app|tumhe|tujhe|tumko|tumke|aapko)\b", body, re.I
+    ):
+        return False
+    return True
+
+
+def _creator_reply(user_message: str) -> str:
+    low = user_message.lower()
+    if "Reply in Bhojpuri." in user_message or "bhojpuri" in low:
+        return (
+            f"Hamke {APP_AUTHOR} banawan baaden. "
+            f"Ii Agentic AI app ke author aur developer {APP_AUTHOR} hawan."
+        )
+    if "Reply in Hindi." in user_message or re.search(
+        r"[\u0900-\u097F]|(kisne|kaun|kon|banaya|bnaya|tumhe|tumke)", user_message, re.I
+    ):
+        return (
+            f"Mujhe {APP_AUTHOR} ne banaya hai. "
+            f"Is Agentic AI app ke author aur developer {APP_AUTHOR} hain."
+        )
+    return (
+        f"I was built and developed by {APP_AUTHOR}. "
+        f"{APP_AUTHOR} is the author of this Agentic AI app."
+    )
 
 
 class Agent:
@@ -80,6 +143,11 @@ class Agent:
             for url in (images or [])[:4]
             if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
         ]
+        if not safe_images and _is_creator_question(text):
+            answer = _creator_reply(text)
+            self.memory.add("user", text)
+            self.memory.add("assistant", answer)
+            return answer
         if safe_images:
             parts: list[dict[str, Any]] = [{"type": "text", "text": text}]
             for url in safe_images:
@@ -90,6 +158,7 @@ class Agent:
         schemas = self.tools.schemas()
         model = self.llm.settings.vision_model if safe_images else None
         dropped_tools = False
+        vision_fallback_i = 0
 
         for step in range(1, self.max_steps + 1):
             self.on_trace(f"thinking:{step}")
@@ -101,6 +170,12 @@ class Agent:
                     model=model,
                 )
             except APIStatusError as exc:
+                if safe_images and _is_model_missing(exc):
+                    nxt = _next_vision_model(model, vision_fallback_i)
+                    if nxt:
+                        model = nxt
+                        vision_fallback_i += 1
+                        continue
                 if safe_images and schemas and not dropped_tools:
                     dropped_tools = True
                     schemas = []
@@ -139,7 +214,7 @@ class Agent:
                     self.memory.add_tool_result(call_id, name, result)
                 continue
 
-            answer = (message.content or "").strip()
+            answer = _message_text(message)
             if not answer:
                 self.on_trace("thinking:retry")
                 continue
@@ -201,6 +276,30 @@ class Agent:
         result = self.tools.run(name, args)
         self.memory.add_tool_result(call_id, name, result)
         return True
+
+
+def _message_text(message: Any) -> str:
+    text = str(getattr(message, "content", None) or "").strip()
+    if text:
+        return text
+    for attr in ("reasoning", "reasoning_content"):
+        extra = getattr(message, attr, None)
+        if extra:
+            return str(extra).strip()
+    return ""
+
+
+def _is_model_missing(exc: APIStatusError) -> bool:
+    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    text = str(exc).lower()
+    return status == 404 or "model_not_found" in text or "does not exist" in text
+
+
+def _next_vision_model(current: str | None, used: int) -> str | None:
+    options = [m for m in _GROQ_VISION_FALLBACKS if m != current]
+    if used >= len(options):
+        return None
+    return options[used]
 
 
 def _last_user_text(messages: list[dict[str, Any]]) -> str:
