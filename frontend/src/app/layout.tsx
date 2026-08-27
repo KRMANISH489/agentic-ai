@@ -1,15 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, Syne } from "next/font/google";
+import { Figtree, Fraunces } from "next/font/google";
 import "./globals.css";
 
-const outfit = Outfit({
+const figtree = Figtree({
   subsets: ["latin"],
-  variable: "--font-outfit",
+  variable: "--font-ui",
+  display: "swap",
 });
 
-const syne = Syne({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-syne",
+  variable: "--font-display",
+  display: "swap",
 });
 
 export const viewport: Viewport = {
@@ -21,7 +23,13 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Agentic",
   description: "Jump in. Agentic AI by Abhishek Mishra.",
-  icons: { icon: "/favicon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon.png?v=4", type: "image/png" },
+      { url: "/favicon.svg?v=4", type: "image/svg+xml" },
+    ],
+    apple: "/favicon.png?v=4",
+  },
 };
 
 export default function RootLayout({
@@ -30,8 +38,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${outfit.variable} ${syne.variable}`}>{children}</body>
+    <html lang="en" className={`${figtree.variable} ${fraunces.variable}`}>
+      <body className={figtree.className}>{children}</body>
     </html>
   );
 }

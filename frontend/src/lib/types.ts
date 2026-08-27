@@ -16,6 +16,20 @@ export type ChatItem = {
   mode: string;
   updatedAt: number;
   messages: ChatMessage[];
+  projectId?: string;
+};
+
+export type ProjectFile = {
+  id: string;
+  title: string;
+  text: string;
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  instructions: string;
+  files: ProjectFile[];
 };
 
 export type ToolItem = {
@@ -36,6 +50,9 @@ export type Prefs = {
   temperature?: number;
   default_mode?: string;
   installed_tools?: string[];
+  teach_instructions?: string;
+  teach_memory?: string;
+  teach_notes?: { id: string; title: string; text: string }[];
 };
 
 export type AppState = {

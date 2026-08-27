@@ -4,11 +4,12 @@ import json
 import os
 import queue
 import threading
+import uuid
 import webbrowser
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,10 +29,22 @@ from agentic_ai.auth import (
     _set_state,
 )
 from agentic_ai.agent import Agent
+from agentic_ai.canva import (
+    app_configured as canva_app_configured,
+    authorize_url as canva_authorize_url,
+    bind_user as bind_canva_user,
+    disconnect as canva_disconnect,
+    finish_connect as canva_finish,
+    list_designs as canva_list_designs,
+    save_app_keys as save_canva_keys,
+    set_pkce_cookie,
+    status_for as canva_status_for,
+)
 from agentic_ai.config import load_settings, save_groq_key
 from agentic_ai.crew import Crew
+from agentic_ai.files import FileExtractError, extract_bytes
 from agentic_ai.prefs import APP_VERSION, load_prefs, save_prefs
-from agentic_ai.tools import TOOL_CATALOG
+from agentic_ai.tools import TOOL_CATALOG, delete_note, list_notes, read_note
 
 STATIC_DIR = Path(__file__).parent / "static"
 def _cors_origins() -> list[str]:
@@ -69,12 +82,20 @@ class HistoryTurn(BaseModel):
     content: str
 
 
+class ProjectFileIn(BaseModel):
+    title: str = ""
+    text: str = ""
+
+
 class ChatRequest(BaseModel):
     message: str
     mode: str = "agent"
     history: list[HistoryTurn] = []
     images: list[str] = []
     lang: str = "en"
+    project_name: str = ""
+    project_instructions: str = ""
+    project_files: list[ProjectFileIn] = []
 
 
 class SetupRequest(BaseModel):
@@ -90,6 +111,12 @@ class PrefsUpdate(BaseModel):
     enter_to_send: bool | None = None
     voice_read_aloud: bool | None = None
     voice_auto_send: bool | None = None
+    teach_instructions: str | None = None
+    teach_memory: str | None = None
+
+
+class TeachForget(BaseModel):
+    id: str
 
 
 class ToolAction(BaseModel):
@@ -101,11 +128,9 @@ class LocalLogin(BaseModel):
     email: str
 
 
-class OAuthKeys(BaseModel):
-    google_client_id: str = ""
-    google_client_secret: str = ""
-    github_client_id: str = ""
-    github_client_secret: str = ""
+class CanvaKeys(BaseModel):
+    client_id: str = ""
+    client_secret: str = ""
 
 
 def _is_loopback_host(host: str | None) -> bool:
@@ -162,6 +187,7 @@ def _rebuild_agents() -> None:
 
 def _get_runner(mode: str, on_trace, user: dict | None = None):
     global _agent, _crew
+    bind_canva_user(str((user or {}).get("email") or ""))
     if mode == "crew":
         if _crew is None:
             _crew = Crew(on_trace=on_trace)
@@ -205,8 +231,8 @@ def index(request: Request):
 @app.get("/favicon.ico")
 def favicon() -> FileResponse:
     return FileResponse(
-        STATIC_DIR / "favicon.svg",
-        media_type="image/svg+xml",
+        STATIC_DIR / "favicon.png",
+        media_type="image/png",
         headers={"Cache-Control": "no-store"},
     )
 
@@ -295,6 +321,7 @@ def auth_logout():
 def status(user: dict = Depends(require_user)) -> dict:
     payload = _status_payload()
     payload["user"] = user
+    payload["canva"] = canva_status_for(user)
     return payload
 
 
@@ -359,6 +386,89 @@ def uninstall_tool(req: ToolAction, _user: dict = Depends(require_user)) -> dict
     return _status_payload()
 
 
+@app.post("/api/extract")
+async def extract_upload(file: UploadFile = File(...), _user: dict = Depends(require_user)) -> dict:
+    data = await file.read()
+    name = file.filename or "file"
+    try:
+        text = extract_bytes(name, data)
+    except FileExtractError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read that file: {exc}") from exc
+    return {"name": name, "text": text, "chars": len(text)}
+
+
+@app.post("/api/teach/file")
+async def teach_upload(file: UploadFile = File(...), _user: dict = Depends(require_user)) -> dict:
+    data = await file.read()
+    name = file.filename or "file"
+    try:
+        text = extract_bytes(name, data)
+    except FileExtractError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read that file: {exc}") from exc
+    prefs = load_prefs()
+    notes = list(prefs.get("teach_notes") or [])
+    notes.append({"id": str(uuid.uuid4()), "title": Path(name).name[:80], "text": text[:12000]})
+    save_prefs({"teach_notes": notes[-5:]})
+    with _lock:
+        _rebuild_agents()
+    return _status_payload()
+
+
+@app.post("/api/teach/forget")
+def teach_forget(req: TeachForget, _user: dict = Depends(require_user)) -> dict:
+    prefs = load_prefs()
+    notes = [item for item in (prefs.get("teach_notes") or []) if str(item.get("id")) != req.id]
+    save_prefs({"teach_notes": notes})
+    with _lock:
+        _rebuild_agents()
+    return _status_payload()
+
+
+@app.get("/api/notes")
+def notes_index(_user: dict = Depends(require_user)) -> dict:
+    return {"notes": list_notes()}
+
+
+@app.get("/api/notes/{name}")
+def notes_get(name: str, _user: dict = Depends(require_user)) -> dict:
+    try:
+        return {"name": Path(name).name, "content": read_note(name)}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Note not found.") from None
+
+
+@app.delete("/api/notes/{name}")
+def notes_delete(name: str, _user: dict = Depends(require_user)) -> dict:
+    try:
+        delete_note(name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Note not found.") from None
+    return {"ok": True, "notes": list_notes()}
+
+
+def _project_note(req: ChatRequest) -> str:
+    parts: list[str] = []
+    name = (req.project_name or "").strip()
+    instructions = (req.project_instructions or "").strip()
+    files = req.project_files or []
+    if name:
+        parts.append(f"Active project: {name[:80]}")
+    if instructions:
+        parts.append("Project instructions:\n" + instructions[:4000])
+    for item in files[:8]:
+        title = (item.title or "file").strip()[:80]
+        text = (item.text or "").strip()
+        if text:
+            parts.append(f"Project file ({title}):\n{text[:8000]}")
+    if not parts:
+        return ""
+    return "\n\nUse this project context:\n" + "\n\n".join(parts) + "\n"
+
+
 def _reply_lang_note(lang: str) -> str:
     if lang == "bho":
         return "\n\nReply in Bhojpuri."
@@ -379,7 +489,7 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
             with _lock:
                 runner = _get_runner(req.mode, on_trace, user)
                 transcript = [{"role": t.role, "content": t.content} for t in req.history]
-                prompt = req.message.strip() + _reply_lang_note(req.lang)
+                prompt = req.message.strip() + _reply_lang_note(req.lang) + _project_note(req)
                 photos = [
                     url
                     for url in req.images[:4]

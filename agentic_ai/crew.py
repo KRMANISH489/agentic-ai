@@ -20,6 +20,11 @@ WRITER_PROMPT = """You are a Writer agent.
 You receive a research brief. Turn it into a clear, useful answer for the user.
 Cite sources. Do not invent facts that are not in the brief.
 You may use calculator or current_time if needed. Do not search again unless the brief is empty.
+If the user asked for a webpage, UI, SVG, or standalone document, put it in:
+<artifact type="html" title="Short title">
+complete file
+</artifact>
+Allowed types: html, svg, markdown, code.
 """
 
 
@@ -38,7 +43,7 @@ class Crew:
         writer_tools = [
             t
             for t in all_tools
-            if t.name in {"calculator", "current_time", "notes_write", "unit_convert", "text_stats"}
+            if t.name in {"calculator", "current_time", "notes_write", "unit_convert", "text_stats", "code_run"}
         ]
 
         self.researcher = Agent(

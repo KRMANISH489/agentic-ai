@@ -6,6 +6,7 @@ import math
 import operator
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -15,6 +16,11 @@ except ImportError:
     tzdata = None
 
 from ddgs import DDGS
+
+from agentic_ai.config import ROOT_DIR
+from agentic_ai.sandbox import code_run
+
+NOTES_DIR = ROOT_DIR / "workspace_notes"
 
 
 @dataclass(frozen=True)
@@ -180,15 +186,49 @@ def wikipedia_summary(topic: str) -> str:
 
 
 def notes_write(filename: str, content: str) -> str:
-    safe_name = filename.replace("\\", "/").split("/")[-1]
+    safe_name = filename.replace("\\", "/").split("/")[-1].strip() or "note.md"
     if not safe_name.endswith(".md"):
         safe_name += ".md"
-    path = f"workspace_notes/{safe_name}"
-    from pathlib import Path
+    NOTES_DIR.mkdir(parents=True, exist_ok=True)
+    path = NOTES_DIR / safe_name
+    path.write_text(content, encoding="utf-8")
+    return f"Saved notes to {safe_name}. The user can open it in Notes."
 
-    Path("workspace_notes").mkdir(exist_ok=True)
-    Path(path).write_text(content, encoding="utf-8")
-    return f"Saved notes to {path}"
+
+def notes_dir() -> Path:
+    NOTES_DIR.mkdir(parents=True, exist_ok=True)
+    return NOTES_DIR
+
+
+def list_notes() -> list[dict[str, Any]]:
+    folder = notes_dir()
+    items = []
+    for path in sorted(folder.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
+        stat = path.stat()
+        items.append(
+            {
+                "name": path.name,
+                "chars": stat.st_size,
+                "updated": int(stat.st_mtime * 1000),
+            }
+        )
+    return items
+
+
+def read_note(name: str) -> str:
+    safe = Path(name).name
+    path = notes_dir() / safe
+    if not path.exists() or path.suffix.lower() != ".md":
+        raise FileNotFoundError(safe)
+    return path.read_text(encoding="utf-8")
+
+
+def delete_note(name: str) -> None:
+    safe = Path(name).name
+    path = notes_dir() / safe
+    if not path.exists() or path.suffix.lower() != ".md":
+        raise FileNotFoundError(safe)
+    path.unlink()
 
 
 def dice_roll(sides: int = 6, count: int = 1) -> str:
@@ -298,7 +338,8 @@ TOOL_CATALOG = [
     {"id": "github", "title": "GitHub", "blurb": "Look up a GitHub user or repository.", "category": "Research", "core": False, "icon": "github"},
     {"id": "calculator", "title": "Calculator", "blurb": "Safe arithmetic for exact numbers.", "category": "Utilities", "core": True, "icon": "calc"},
     {"id": "current_time", "title": "Clock", "blurb": "Date and time in any timezone.", "category": "Utilities", "core": True, "icon": "clock"},
-    {"id": "notes_write", "title": "Notes", "blurb": "Save markdown notes on this computer.", "category": "Utilities", "core": True, "icon": "notes"},
+    {"id": "notes_write", "title": "Notes", "blurb": "Save markdown notes you can open in Notes.", "category": "Utilities", "core": True, "icon": "notes"},
+    {"id": "code_run", "title": "Code sandbox", "blurb": "Run short Python in a locked-down sandbox.", "category": "Utilities", "core": True, "icon": "code"},
     {"id": "dice_roll", "title": "Dice", "blurb": "Roll dice, like 2d6 or 1d20.", "category": "Extras", "core": False, "icon": "dice"},
     {"id": "unit_convert", "title": "Unit Convert", "blurb": "Convert km/mi, kg/lb, m/ft, C/F.", "category": "Extras", "core": False, "icon": "convert"},
     {"id": "text_stats", "title": "Text Stats", "blurb": "Count characters, words, and lines.", "category": "Extras", "core": False, "icon": "text"},
@@ -393,6 +434,21 @@ def builtin_tools() -> list[Tool]:
                 "required": ["filename", "content"],
             },
             handler=notes_write,
+        ),
+        Tool(
+            name="code_run",
+            description="Run short Python in a sandbox (math/json/re/datetime only, no files or network). Print the result.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Python source to execute. Use print() to show output.",
+                    }
+                },
+                "required": ["code"],
+            },
+            handler=code_run,
         ),
         Tool(
             name="dice_roll",

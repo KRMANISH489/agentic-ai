@@ -2,10 +2,13 @@
 
 import { FormEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
 import { marked, type Tokens } from "marked";
+import { ArtifactPane } from "@/components/ArtifactPane";
 import { Logo } from "@/components/Logo";
-import type { AppState, ChatItem, ChatMessage, ToolItem, User } from "@/lib/types";
+import { extractArtifacts, type Artifact } from "@/lib/artifacts";
+import type { AppState, ChatItem, ChatMessage, Project, ProjectFile, ToolItem, User } from "@/lib/types";
 
 const STORE_KEY = "agentic.chats.v1";
+const PROJECTS_KEY = "agentic.projects.v1";
 const MODE_LABELS: Record<string, string> = {
   agent: "Single agent",
   crew: "Researcher + Writer",
@@ -27,6 +30,8 @@ function friendlyStatus(text: string) {
   if (text.startsWith("tool:unit_convert")) return "Converting units…";
   if (text.startsWith("tool:text_stats")) return "Counting text…";
   if (text.startsWith("tool:uuid_generate")) return "Generating IDs…";
+  if (text.startsWith("tool:notes_write")) return "Saving a note…";
+  if (text.startsWith("tool:code_run")) return "Running code…";
   if (text.startsWith("tool:random_pick")) return "Picking an option…";
   if (text.startsWith("tool:")) return "Using a tool…";
   return "Thinking…";
@@ -85,6 +90,23 @@ async function copyText(text: string) {
 }
 
 type PendingPhoto = { id: string; name: string; dataUrl: string };
+type PendingFile = { id: string; name: string; text: string };
+
+function wrapFileBlock(name: string, text: string) {
+  return `---file:${name}---\n${text}\n---end-file---`;
+}
+
+function parseUserFiles(text: string) {
+  const files: string[] = [];
+  const caption = text
+    .replace(/\n*---file:(.*?)---\n[\s\S]*?\n---end-file---/g, (_all, name: string) => {
+      files.push(String(name).trim());
+      return "";
+    })
+    .replace(/\n\[Photo attached\]\s*$/, "")
+    .trim();
+  return { caption: caption || (files.length ? files.join(", ") : text), files };
+}
 
 async function fileToJpeg(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
@@ -111,12 +133,43 @@ async function fileToJpeg(file: File): Promise<string> {
 
 function speakable(text: string) {
   return text
+    .replace(/<artifact\b[\s\S]*?<\/artifact>/gi, " ")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/[#*_>~]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+type Bubble = {
+  id: string;
+  role: "user" | "agent";
+  html: string;
+  text?: string;
+  images?: string[];
+  files?: string[];
+  artifacts?: Artifact[];
+  trace?: string;
+  error?: boolean;
+  thinking?: boolean;
+};
+
+function agentFromText(id: string, text: string, extra: Partial<Bubble> = {}): Bubble {
+  const parsed = extractArtifacts(text);
+  const artifacts: Artifact[] = parsed.artifacts.map((item, index) => ({
+    ...item,
+    id: `${id}-${index}`,
+  }));
+  return {
+    id,
+    role: "agent",
+    html: html(parsed.displayText || (artifacts.length ? "Opened in Artifacts." : text)),
+    text,
+    artifacts: artifacts.length ? artifacts : undefined,
+    ...extra,
+    ...(artifacts.length ? { artifacts } : {}),
+  };
 }
 
 type SpeechRec = {
@@ -180,6 +233,12 @@ function ToolIcon({ name }: { name: string }) {
           <path d="M15 3v5h5M9 13h6M9 17h4" />
         </svg>
       );
+    case "code":
+      return (
+        <svg {...common}>
+          <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" />
+        </svg>
+      );
     case "dice":
       return (
         <svg {...common}>
@@ -223,17 +282,6 @@ function ToolIcon({ name }: { name: string }) {
   }
 }
 
-type Bubble = {
-  id: string;
-  role: "user" | "agent";
-  html: string;
-  text?: string;
-  images?: string[];
-  trace?: string;
-  error?: boolean;
-  thinking?: boolean;
-};
-
 export default function AppClient() {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -254,6 +302,8 @@ export default function AppClient() {
     tools: [],
   });
   const [chats, setChats] = useState<ChatItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string>("");
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [mode, setMode] = useState("agent");
   const [modeOpen, setModeOpen] = useState(false);
@@ -262,7 +312,11 @@ export default function AppClient() {
   const [lang, setLang] = useState("en");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"tools" | "features" | "about">("tools");
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesList, setNotesList] = useState<{ name: string; chars: number; updated: number }[]>([]);
+  const [noteName, setNoteName] = useState<string | null>(null);
+  const [noteBody, setNoteBody] = useState("");
+  const [settingsTab, setSettingsTab] = useState<"tools" | "features" | "teach" | "about">("tools");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -275,8 +329,15 @@ export default function AppClient() {
   const [navOpen, setNavOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [teachInst, setTeachInst] = useState("");
+  const [teachMem, setTeachMem] = useState("");
+  const [teachBusy, setTeachBusy] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [artifactOpen, setArtifactOpen] = useState(false);
+  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -285,9 +346,28 @@ export default function AppClient() {
   const voiceBaseRef = useRef("");
   const voiceFinalRef = useRef("");
   const galleryRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const teachFileRef = useRef<HTMLInputElement>(null);
+  const projectFileRef = useRef<HTMLInputElement>(null);
   const cameraFileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const visibleArtifacts = bubbles.flatMap((b) => b.artifacts || []);
+  const lastArtifactId = visibleArtifacts.at(-1)?.id || null;
+  const showArtifact = artifactOpen && visibleArtifacts.length > 0;
+  const paneArtifactId =
+    (activeArtifactId && visibleArtifacts.some((a) => a.id === activeArtifactId) && activeArtifactId) ||
+    lastArtifactId ||
+    "";
+  const lastAgentId = [...bubbles].reverse().find((b) => b.role === "agent" && !b.thinking && !b.error && b.text)?.id;
+  const currentProject = projects.find((p) => p.id === currentProjectId) || null;
+  const historyNeedle = historyQuery.trim().toLowerCase();
+  const scopedChats = currentProjectId ? chats.filter((c) => c.projectId === currentProjectId) : chats;
+  const visibleChats = scopedChats.filter((c) => {
+    if (!historyNeedle) return true;
+    if (c.title.toLowerCase().includes(historyNeedle)) return true;
+    return c.messages.some((m) => m.content.toLowerCase().includes(historyNeedle));
+  });
 
   useEffect(() => {
     try {
@@ -295,11 +375,37 @@ export default function AppClient() {
     } catch {
       setChats([]);
     }
+    try {
+      const raw = JSON.parse(localStorage.getItem(PROJECTS_KEY) || "[]");
+      setProjects(Array.isArray(raw) ? raw : []);
+    } catch {
+      setProjects([]);
+    }
   }, []);
 
   useEffect(() => {
     if (ready && user) localStorage.setItem(STORE_KEY, JSON.stringify(chats));
   }, [chats, ready, user]);
+
+  useEffect(() => {
+    if (ready && user) localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  }, [projects, ready, user]);
+
+  useEffect(() => {
+    if (!lastArtifactId) {
+      setArtifactOpen(false);
+      setActiveArtifactId(null);
+      return;
+    }
+    setActiveArtifactId(lastArtifactId);
+    setArtifactOpen(true);
+  }, [lastArtifactId]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    setTeachInst(appState.prefs?.teach_instructions || "");
+    setTeachMem(appState.prefs?.teach_memory || "");
+  }, [settingsOpen, appState.prefs?.teach_instructions, appState.prefs?.teach_memory]);
 
   useEffect(() => {
     async function boot() {
@@ -442,12 +548,20 @@ export default function AppClient() {
   function showMessages(messages: ChatMessage[]) {
     setEditingId(null);
     setBubbles(
-      messages.map((m, i) => ({
-        id: `${i}-${m.role}`,
-        role: m.role === "user" ? "user" : "agent",
-        html: html(m.content),
-        text: m.content,
-      }))
+      messages.map((m, i) => {
+        const id = `${i}-${m.role}`;
+        if (m.role === "user") {
+          const parsed = parseUserFiles(m.content);
+          return {
+            id,
+            role: "user" as const,
+            html: html(parsed.caption),
+            text: parsed.caption,
+            files: parsed.files.length ? parsed.files : undefined,
+          };
+        }
+        return agentFromText(id, m.content);
+      })
     );
   }
 
@@ -478,6 +592,129 @@ export default function AppClient() {
     }
   }
 
+  function patchProject(id: string, patch: Partial<Project>) {
+    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+
+  async function selectProject(id: string) {
+    setCurrentProjectId(id);
+    const chat = chats.find((c) => c.id === currentId);
+    if (id && chat && chat.projectId !== id) {
+      await newChat();
+    }
+  }
+
+  async function addProject() {
+    const project: Project = {
+      id: crypto.randomUUID(),
+      name: `Project ${projects.length + 1}`,
+      instructions: "",
+      files: [],
+    };
+    setProjects((prev) => [project, ...prev]);
+    setCurrentProjectId(project.id);
+    await newChat();
+  }
+
+  async function removeProject(id: string) {
+    const project = projects.find((p) => p.id === id);
+    if (!project) return;
+    if (!window.confirm(`Delete “${project.name}”? Chats stay in Recents.`)) return;
+    setChats((prev) => prev.map((c) => (c.projectId === id ? { ...c, projectId: undefined } : c)));
+    setProjects((prev) => prev.filter((p) => p.id !== id));
+    if (currentProjectId === id) setCurrentProjectId("");
+  }
+
+  async function addProjectFiles(files: FileList | File[]) {
+    if (!currentProject) return;
+    const room = Math.max(0, 8 - currentProject.files.length);
+    if (!room) {
+      setVoiceHint("A project can hold up to 8 files.");
+      return;
+    }
+    try {
+      const next: ProjectFile[] = [];
+      for (const file of Array.from(files).slice(0, room)) {
+        const body = new FormData();
+        body.append("file", file);
+        const res = await fetch("/api/extract", { method: "POST", credentials: "include", body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(typeof data.detail === "string" ? data.detail : "Could not read that file.");
+        }
+        next.push({
+          id: crypto.randomUUID(),
+          title: String(data.name || file.name).slice(0, 80),
+          text: String(data.text || "").slice(0, 12000),
+        });
+      }
+      patchProject(currentProject.id, { files: [...currentProject.files, ...next].slice(0, 8) });
+      setVoiceHint("");
+    } catch (err) {
+      setVoiceHint(err instanceof Error ? err.message : "Could not add that file.");
+    }
+  }
+
+  function dropProjectFile(fileId: string) {
+    if (!currentProject) return;
+    patchProject(currentProject.id, { files: currentProject.files.filter((f) => f.id !== fileId) });
+  }
+
+  async function refreshNotes() {
+    const res = await fetch("/api/notes", { credentials: "include" });
+    const data = await res.json().catch(() => ({}));
+    setNotesList(Array.isArray(data.notes) ? data.notes : []);
+  }
+
+  async function openNotes() {
+    setUserOpen(false);
+    setNavOpen(false);
+    setNotesOpen(true);
+    setNoteName(null);
+    setNoteBody("");
+    await refreshNotes();
+  }
+
+  async function openNote(name: string) {
+    const res = await fetch(`/api/notes/${encodeURIComponent(name)}`, { credentials: "include" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setVoiceHint(typeof data.detail === "string" ? data.detail : "Could not open that note.");
+      return;
+    }
+    setNoteName(String(data.name || name));
+    setNoteBody(String(data.content || ""));
+  }
+
+  async function removeNote(name: string) {
+    if (!window.confirm(`Delete ${name}?`)) return;
+    const res = await fetch(`/api/notes/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setVoiceHint(typeof data.detail === "string" ? data.detail : "Could not delete that note.");
+      return;
+    }
+    setNotesList(Array.isArray(data.notes) ? data.notes : []);
+    if (noteName === name) {
+      setNoteName(null);
+      setNoteBody("");
+    }
+  }
+
+  function downloadNote() {
+    if (!noteName) return;
+    const blob = new Blob([noteBody], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = noteName;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   function ensureChat(firstMessage: string, list: ChatItem[]) {
     let item = list.find((c) => c.id === currentId);
     const copy = [...list];
@@ -488,6 +725,7 @@ export default function AppClient() {
         mode,
         updatedAt: Date.now(),
         messages: [],
+        projectId: currentProjectId || undefined,
       };
       copy.unshift(item);
       setCurrentId(item.id);
@@ -519,6 +757,7 @@ export default function AppClient() {
     images: string[] = []
   ) {
     const stored = images.length ? `${message}\n[Photo attached]` : message;
+    const shown = parseUserFiles(message);
     const nextItem: ChatItem = {
       ...item,
       updatedAt: Date.now(),
@@ -529,8 +768,9 @@ export default function AppClient() {
     const userBubble: Bubble = {
       id: crypto.randomUUID(),
       role: "user",
-      html: html(message),
-      text: message,
+      html: html(shown.caption),
+      text: shown.caption,
+      files: shown.files.length ? shown.files : undefined,
       images: images.length ? images : undefined,
     };
     const agentBubble: Bubble = {
@@ -543,6 +783,7 @@ export default function AppClient() {
     if (resetBubbles) setBubbles([...resetBubbles, userBubble, agentBubble]);
     else setBubbles((prev) => [...prev, userBubble, agentBubble]);
     setSending(true);
+    const project = projects.find((p) => p.id === (item.projectId || currentProjectId));
     try {
       if (resetMemory) {
         await fetch("/api/reset", { method: "POST", credentials: "include" });
@@ -551,7 +792,16 @@ export default function AppClient() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, mode, history, images, lang }),
+        body: JSON.stringify({
+          message,
+          mode,
+          history,
+          images,
+          lang,
+          project_name: project?.name || "",
+          project_instructions: project?.instructions || "",
+          project_files: (project?.files || []).map((file) => ({ title: file.title, text: file.text })),
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -586,7 +836,7 @@ export default function AppClient() {
           } else if (event.type === "answer") {
             setBubbles((prev) =>
               prev.map((b) =>
-                b.id === agentId ? { ...b, html: html(event.content), text: event.content, trace: "", thinking: false } : b
+                b.id === agentId ? agentFromText(agentId, event.content, { thinking: false, trace: "" }) : b
               )
             );
             setChats((prev) =>
@@ -629,17 +879,23 @@ export default function AppClient() {
     window.speechSynthesis?.cancel();
     setSpeakingId(null);
     const message = (spoken ?? input).trim();
-    if ((!message && !pendingPhotos.length) || sending) return;
+    if ((!message && !pendingPhotos.length && !pendingFiles.length) || sending) return;
     const photos = pendingPhotos.map((p) => p.dataUrl);
-    const caption = message || (photos.length > 1 ? "What is in these photos?" : "What is in this photo?");
+    const fileBlocks = pendingFiles.map((file) => wrapFileBlock(file.name, file.text)).join("\n\n");
+    const caption =
+      message ||
+      (pendingFiles.length ? `Read ${pendingFiles.map((f) => f.name).join(", ")}` : "") ||
+      (photos.length > 1 ? "What is in these photos?" : "What is in this photo?");
+    const prompt = fileBlocks ? `${caption}\n\n${fileBlocks}` : caption;
     setEditingId(null);
     setInput("");
     setPendingPhotos([]);
+    setPendingFiles([]);
     setAttachOpen(false);
     if (inputRef.current) inputRef.current.style.height = "auto";
     const { item, copy } = ensureChat(caption, chats);
     const history = item.messages.map((m) => ({ role: m.role, content: m.content }));
-    await runChatTurn(caption, history, item, copy, undefined, false, photos);
+    await runChatTurn(prompt, history, item, copy, undefined, false, photos);
   }
 
   function closeCamera() {
@@ -669,6 +925,33 @@ export default function AppClient() {
       setVoiceHint("");
     } catch (err) {
       setVoiceHint(err instanceof Error ? err.message : "Could not add that photo.");
+    }
+  }
+
+  async function addDocFiles(files: FileList | File[]) {
+    const list = Array.from(files);
+    if (!list.length) return;
+    const room = Math.max(0, 4 - pendingFiles.length);
+    if (!room) {
+      setVoiceHint("You can attach up to 4 files.");
+      return;
+    }
+    try {
+      const next: PendingFile[] = [];
+      for (const file of list.slice(0, room)) {
+        const body = new FormData();
+        body.append("file", file);
+        const res = await fetch("/api/extract", { method: "POST", credentials: "include", body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(typeof data.detail === "string" ? data.detail : "Could not read that file.");
+        }
+        next.push({ id: crypto.randomUUID(), name: data.name || file.name, text: String(data.text || "") });
+      }
+      setPendingFiles((prev) => [...prev, ...next].slice(0, 4));
+      setVoiceHint("");
+    } catch (err) {
+      setVoiceHint(err instanceof Error ? err.message : "Could not add that file.");
     }
   }
 
@@ -902,12 +1185,95 @@ export default function AppClient() {
     window.setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1400);
   }
 
+  async function regenerate() {
+    if (sending) return;
+    const item = chats.find((c) => c.id === currentId);
+    const msgs = item?.messages || [];
+    let lastAsst = -1;
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      if (msgs[i].role === "assistant") {
+        lastAsst = i;
+        break;
+      }
+    }
+    if (lastAsst < 0) return;
+    let lastUser = -1;
+    for (let i = lastAsst - 1; i >= 0; i -= 1) {
+      if (msgs[i].role === "user") {
+        lastUser = i;
+        break;
+      }
+    }
+    if (lastUser < 0) return;
+    const userMsg = msgs[lastUser].content.replace(/\n\[Photo attached\]\s*$/, "");
+    const history = msgs.slice(0, lastUser);
+    const keptBubbles = bubbles.filter((b) => !b.thinking).slice(0, lastUser);
+    const nextItem = { ...item!, messages: history, updatedAt: Date.now() };
+    const copy = chats.map((c) => (c.id === nextItem.id ? nextItem : c));
+    await runChatTurn(userMsg, history, nextItem, copy, keptBubbles, true);
+  }
+
+  function exportChat() {
+    const item = chats.find((c) => c.id === currentId);
+    const msgs = item?.messages?.length
+      ? item.messages
+      : bubbles
+          .filter((b) => !b.thinking)
+          .map((b) => ({
+            role: (b.role === "user" ? "user" : "assistant") as ChatMessage["role"],
+            content: textOf(b),
+          }))
+          .filter((m) => m.content);
+    if (!msgs.length) return;
+    const title = item?.title || "Agentic chat";
+    const body = [`# ${title}`, "", ...msgs.map((m) => `## ${m.role === "user" ? "You" : "Agentic"}\n\n${m.content}`)].join("\n\n");
+    const blob = new Blob([body], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/[^\w\s-]+/g, "").trim().slice(0, 40) || "agentic-chat"}.md`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setUserOpen(false);
+    setNavOpen(false);
+  }
+
   async function savePref(updates: Record<string, unknown>) {
     const res = await fetch("/api/settings", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
+    });
+    setAppState(await res.json());
+  }
+
+  async function addTeachFile(files: FileList | File[]) {
+    setTeachBusy(true);
+    try {
+      for (const file of Array.from(files)) {
+        const body = new FormData();
+        body.append("file", file);
+        const res = await fetch("/api/teach/file", { method: "POST", credentials: "include", body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(typeof data.detail === "string" ? data.detail : "Could not add that training file.");
+        }
+        setAppState(data);
+      }
+    } catch (err) {
+      setVoiceHint(err instanceof Error ? err.message : "Could not add that training file.");
+    } finally {
+      setTeachBusy(false);
+    }
+  }
+
+  async function forgetTeach(id: string) {
+    const res = await fetch("/api/teach/forget", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
     });
     setAppState(await res.json());
   }
@@ -1076,7 +1442,7 @@ export default function AppClient() {
         </div>
       )}
 
-      <div className="shell">
+      <div className={`shell ${showArtifact ? "has-artifact" : ""}`}>
         <button
           className="nav-backdrop"
           type="button"
@@ -1097,6 +1463,68 @@ export default function AppClient() {
           <button className="new-chat" type="button" onClick={() => void newChat()}>
             + New leap
           </button>
+          <div className="project-picker">
+            <select
+              aria-label="Project"
+              value={currentProjectId}
+              onChange={(e) => void selectProject(e.target.value)}
+            >
+              <option value="">All chats</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={() => void addProject()}>
+              + Project
+            </button>
+          </div>
+          {currentProject ? (
+            <div className="project-card">
+              <input
+                className="project-name"
+                value={currentProject.name}
+                onChange={(e) => patchProject(currentProject.id, { name: e.target.value })}
+                aria-label="Project name"
+              />
+              <textarea
+                className="project-notes"
+                rows={3}
+                value={currentProject.instructions}
+                onChange={(e) => patchProject(currentProject.id, { instructions: e.target.value })}
+                placeholder="Standing instructions for this project"
+              />
+              <div className="project-files">
+                {currentProject.files.map((file) => (
+                  <div key={file.id} className="project-file">
+                    <span>{file.title}</span>
+                    <button type="button" aria-label={`Remove ${file.title}`} onClick={() => dropProjectFile(file.id)}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="project-actions">
+                <button type="button" onClick={() => projectFileRef.current?.click()}>
+                  Add file
+                </button>
+                <button type="button" className="danger" onClick={() => void removeProject(currentProject.id)}>
+                  Delete
+                </button>
+              </div>
+              <input
+                ref={projectFileRef}
+                type="file"
+                accept=".pdf,.txt,.md,.csv,.json,.docx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) void addProjectFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          ) : null}
           <div className={`mode-picker ${modeOpen ? "open" : ""}`}>
             <button
               className="mode-btn"
@@ -1123,11 +1551,21 @@ export default function AppClient() {
             </div>
           </div>
           <div className="history-label">Recents</div>
+          <input
+            className="history-search"
+            type="search"
+            value={historyQuery}
+            onChange={(e) => setHistoryQuery(e.target.value)}
+            placeholder="Search chats"
+            aria-label="Search chats"
+          />
           <div className="history">
-            {!chats.length ? (
-              <div className="history-empty">No chats yet</div>
+            {!scopedChats.length ? (
+              <div className="history-empty">{currentProjectId ? "No chats in this project" : "No chats yet"}</div>
+            ) : !visibleChats.length ? (
+              <div className="history-empty">No matches</div>
             ) : (
-              chats
+              visibleChats
                 .slice()
                 .sort((a, b) => b.updatedAt - a.updatedAt)
                 .map((c) => (
@@ -1157,6 +1595,12 @@ export default function AppClient() {
               <div className="user-email">{user?.email}</div>
               <button className="item" type="button" onClick={() => { setUserOpen(false); setNavOpen(false); setSettingsOpen(true); }}>
                 Settings <span className="hint">Ctrl+,</span>
+              </button>
+              <button className="item" type="button" disabled={!bubbles.length} onClick={exportChat}>
+                Export chat
+              </button>
+              <button className="item" type="button" onClick={() => void openNotes()}>
+                Notes
               </button>
               <button className="item" type="button" onClick={() => setLangOpen((v) => !v)}>
                 Language
@@ -1249,7 +1693,7 @@ export default function AppClient() {
                 <div className="empty">
                   <Logo large twinkle />
                   <h2>Ready to leap{user?.name ? `, ${user.name.trim().split(/\s+/)[0]}` : ""}?</h2>
-                  <p>Ask, plan, or drop a photo. The robot jumps in with you.</p>
+                  <p>Jump in with a question, a file, or a project.</p>
                 </div>
               )}
               <div className="chat" onClick={onChatClick}>
@@ -1297,6 +1741,13 @@ export default function AppClient() {
                           </div>
                         ) : null}
                         {b.text?.trim() ? <div className="msg user" dangerouslySetInnerHTML={{ __html: b.html }} /> : null}
+                        {b.files?.length ? (
+                          <div className="file-chips">
+                            {b.files.map((name) => (
+                              <span className="file-chip" key={`${b.id}-${name}`}>{name}</span>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="msg-actions">
                           <button
                             type="button"
@@ -1320,6 +1771,23 @@ export default function AppClient() {
                       <div className="msg-body">
                         {b.trace ? <div className="trace">{b.trace}</div> : null}
                         <div className="md" dangerouslySetInnerHTML={{ __html: b.html }} />
+                        {b.artifacts?.length ? (
+                          <div className="artifact-chips">
+                            {b.artifacts.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className="artifact-chip"
+                                onClick={() => {
+                                  setActiveArtifactId(item.id);
+                                  setArtifactOpen(true);
+                                }}
+                              >
+                                {item.title}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                         {!b.thinking && !b.error && b.text ? (
                           <div className="msg-actions agent-actions">
                             <button
@@ -1327,8 +1795,18 @@ export default function AppClient() {
                               className="copy-reply"
                               onClick={() => void copyReply(b.id, b.text)}
                             >
-                              {copiedId === b.id ? "Copied" : "Copy code"}
+                              {copiedId === b.id ? "Copied" : "Copy"}
                             </button>
+                            {b.id === lastAgentId ? (
+                              <button
+                                type="button"
+                                className="copy-reply"
+                                disabled={sending}
+                                onClick={() => void regenerate()}
+                              >
+                                Retry
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className={`msg-action ${speakingId === b.id ? "on" : ""}`}
@@ -1357,7 +1835,7 @@ export default function AppClient() {
             </div>
           </div>
           <div className="composer-wrap">
-            {pendingPhotos.length ? (
+            {(pendingPhotos.length || pendingFiles.length) ? (
               <div className="attach-previews">
                 {pendingPhotos.map((photo) => (
                   <div className="attach-preview" key={photo.id}>
@@ -1371,6 +1849,18 @@ export default function AppClient() {
                     </button>
                   </div>
                 ))}
+                {pendingFiles.map((file) => (
+                  <div className="attach-file" key={file.id}>
+                    <span>{file.name}</span>
+                    <button
+                      type="button"
+                      aria-label="Remove file"
+                      onClick={() => setPendingFiles((prev) => prev.filter((p) => p.id !== file.id))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : null}
             <form className="composer" onSubmit={sendMessage}>
@@ -1378,7 +1868,7 @@ export default function AppClient() {
                 <button
                   className="attach-btn"
                   type="button"
-                  aria-label="Add photo"
+                  aria-label="Add photo or file"
                   aria-expanded={attachOpen}
                   disabled={sending}
                   onClick={(e) => {
@@ -1405,6 +1895,15 @@ export default function AppClient() {
                   >
                     Choose from gallery
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachOpen(false);
+                      fileRef.current?.click();
+                    }}
+                  >
+                    Upload file
+                  </button>
                 </div>
               </div>
               <input
@@ -1415,6 +1914,17 @@ export default function AppClient() {
                 hidden
                 onChange={(e) => {
                   if (e.target.files) void addPhotoFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.txt,.md,.csv,.json,.docx,application/pdf,text/plain,text/markdown,text/csv,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                multiple
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) void addDocFiles(e.target.files);
                   e.target.value = "";
                 }}
               />
@@ -1431,7 +1941,7 @@ export default function AppClient() {
               />
               <textarea
                 ref={inputRef}
-                placeholder={listening ? "Listening…" : pendingPhotos.length ? "Add a caption…" : "What’s the mission?"}
+                placeholder={listening ? "Listening…" : pendingPhotos.length || pendingFiles.length ? "Add a caption…" : "What’s the mission?"}
                 rows={1}
                 value={input}
                 onChange={(e) => {
@@ -1454,7 +1964,7 @@ export default function AppClient() {
                   <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v3" />
                 </svg>
               </button>
-              <button className="send-btn" type="submit" aria-label="Send" disabled={sending || (!input.trim() && !pendingPhotos.length)}>
+              <button className="send-btn" type="submit" aria-label="Send" disabled={sending || (!input.trim() && !pendingPhotos.length && !pendingFiles.length)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                   <path d="M12 19V5M5 12l7-7 7 7" />
                 </svg>
@@ -1464,6 +1974,15 @@ export default function AppClient() {
             
           </div>
         </section>
+        {showArtifact && paneArtifactId ? (
+          <ArtifactPane
+            key={paneArtifactId}
+            artifacts={visibleArtifacts}
+            activeId={paneArtifactId}
+            onSelect={setActiveArtifactId}
+            onClose={() => setArtifactOpen(false)}
+          />
+        ) : null}
       </div>
 
       <div className={`camera-overlay ${cameraOpen ? "open" : ""}`}>
@@ -1490,6 +2009,9 @@ export default function AppClient() {
             </button>
             <button type="button" className={settingsTab === "features" ? "active" : ""} onClick={() => setSettingsTab("features")}>
               Features
+            </button>
+            <button type="button" className={settingsTab === "teach" ? "active" : ""} onClick={() => setSettingsTab("teach")}>
+              Teach
             </button>
             <button type="button" className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>
               About
@@ -1615,6 +2137,75 @@ export default function AppClient() {
               </div>
             </div>
           )}
+          {settingsTab === "teach" && (
+            <div className="panel active">
+              <p className="teach-lead">
+                You can train this AI with instructions, facts, and files. That is memory — not a new neural model.
+                It will use this on every chat.
+              </p>
+              <label className="teach-label" htmlFor="teachInst">How should it behave?</label>
+              <textarea
+                id="teachInst"
+                className="teach-box"
+                rows={4}
+                value={teachInst}
+                onChange={(e) => setTeachInst(e.target.value)}
+                placeholder="Example: Answer in short bullets. I run a clothing shop in Patna."
+              />
+              <label className="teach-label" htmlFor="teachMem">Facts to remember</label>
+              <textarea
+                id="teachMem"
+                className="teach-box"
+                rows={5}
+                value={teachMem}
+                onChange={(e) => setTeachMem(e.target.value)}
+                placeholder="Example: My name is Ravi. Brand colors are gold #db8f2a and cream #dacebe."
+              />
+              <button
+                className="install"
+                type="button"
+                disabled={teachBusy}
+                onClick={() => void savePref({ teach_instructions: teachInst, teach_memory: teachMem })}
+              >
+                Save training
+              </button>
+              <div className="teach-files">
+                <div className="row">
+                  <div>
+                    <label>Training files</label>
+                    <p>Upload PDF, Word, or text. Up to 5 files. The AI will study them on every chat.</p>
+                  </div>
+                  <button type="button" className="install" disabled={teachBusy} onClick={() => teachFileRef.current?.click()}>
+                    Add file
+                  </button>
+                </div>
+                <input
+                  ref={teachFileRef}
+                  type="file"
+                  accept=".pdf,.txt,.md,.csv,.json,.docx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  hidden
+                  onChange={(e) => {
+                    if (e.target.files) void addTeachFile(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                {(prefs.teach_notes || []).length ? (
+                  <ul className="teach-list">
+                    {(prefs.teach_notes || []).map((note) => (
+                      <li key={note.id}>
+                        <span>{note.title}</span>
+                        <button type="button" className="remove" onClick={() => void forgetTeach(note.id)}>
+                          Forget
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="teach-empty">No training files yet.</p>
+                )}
+              </div>
+            </div>
+          )}
           {settingsTab === "about" && (
             <div className="panel active">
               <div className="dev-card">
@@ -1661,9 +2252,60 @@ export default function AppClient() {
           </div>
           <div className="help-box">
             <p>Sign in with your name and email, or Google / GitHub. Then ask questions in the chat box.</p>
-            <p>Tap the microphone to speak. After a reply, tap the speaker to hear it. Hover a sent message to edit it.</p>
+            <p>Tap the microphone to speak. After a reply, tap Retry for a new answer, or Export chat from the profile menu.</p>
+            <p>Attach a PDF or text file in chat, or train it in Settings → Teach with instructions, facts, and files.</p>
+            <p>Open a Project in the sidebar to keep chats, files, and standing instructions together.</p>
+            <p>Ask it to save a markdown note, then open Notes from the profile menu. Ask it to run Python and it uses the code sandbox.</p>
+            <p>Ask it to make a webpage or graphic — the result opens in Artifacts on the right.</p>
             <p>Use Settings to install tools like Dice or Unit Convert.</p>
             <p>Single agent is best for quick questions. Researcher + Writer is better for long research.</p>
+          </div>
+        </div>
+      </div>
+      <div className={`overlay ${notesOpen ? "open" : ""}`} onClick={(e) => e.target === e.currentTarget && setNotesOpen(false)}>
+        <div className="settings notes-modal">
+          <div className="settings-head">
+            <h2>Notes</h2>
+            <button className="close-x" type="button" onClick={() => setNotesOpen(false)}>
+              ×
+            </button>
+          </div>
+          <div className="notes-layout">
+            <div className="notes-side">
+              {!notesList.length ? (
+                <p className="history-empty">No saved notes yet. Ask the agent to save one.</p>
+              ) : (
+                notesList.map((note) => (
+                  <button
+                    key={note.name}
+                    type="button"
+                    className={`notes-item ${noteName === note.name ? "active" : ""}`}
+                    onClick={() => void openNote(note.name)}
+                  >
+                    <strong>{note.name}</strong>
+                    <em>{new Date(note.updated).toLocaleString()}</em>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="notes-view">
+              {noteName ? (
+                <>
+                  <div className="notes-toolbar">
+                    <span>{noteName}</span>
+                    <button type="button" onClick={downloadNote}>
+                      Download
+                    </button>
+                    <button type="button" className="danger" onClick={() => void removeNote(noteName)}>
+                      Delete
+                    </button>
+                  </div>
+                  <pre className="note-body">{noteBody}</pre>
+                </>
+              ) : (
+                <p className="history-empty">Pick a note to read it here.</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

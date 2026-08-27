@@ -25,7 +25,7 @@ Rules:
 - Prefer tools for live facts, weather, gold/prices, calculations, time, and research.
 - If the user already named a city or location, use it immediately. Do not ask for it again.
 - After a tool returns data, write a clear final answer for the user.
-- Final answer must be normal language (short paragraphs or bullets). Never output JSON, tool traces, or raw search dumps.
+- Final answer must be normal language (short paragraphs or bullets). Never output JSON, tool traces, or raw search dumps. HTML/SVG/files belong inside <artifact> tags, not as dumped code.
 - Cite sources as names/URLs in the final answer. Do not invent numbers or URLs.
 - If a tool fails, try a different query or another tool before giving up.
 - For weather, call the weather tool. For date/time, call current_time.
@@ -33,6 +33,14 @@ Rules:
 - For a simple greeting (hi, hello, hey), do not use tools. Reply warmly and briefly.
 - If the user language is Hindi, reply in Hindi. If Bhojpuri, reply in Bhojpuri. Otherwise reply in English unless they wrote in another language.
 - When a photo is attached, answer from what you see in the image. Do not invent details that are not visible.
+- When a file is attached, use that file as source of truth. Quote it when useful. Do not invent pages or numbers that are not in it.
+- To run Python, call code_run. Use print() for output. No files, installs, or network.
+- To save a markdown note the user can open later in Notes, call notes_write.
+- When the user wants a webpage, landing page, UI mockup, poster, SVG graphic, or a standalone document, put the full file in an artifact using this exact format:
+<artifact type="html" title="Short title">
+complete file here
+</artifact>
+Allowed types: html, svg, markdown, code. For code, add language="python" (or js, ts, css). Write a short intro in normal language before the artifact. Do not wrap the artifact tags in a markdown fence. The artifact must be a complete, runnable file.
 """
 
 ORIGIN_BLOCK = f"""
@@ -78,8 +86,39 @@ def identity_block(user: dict | None) -> str:
     )
 
 
+def teach_block() -> str:
+    from agentic_ai.prefs import load_prefs
+
+    prefs = load_prefs()
+    parts: list[str] = []
+    instructions = str(prefs.get("teach_instructions") or "").strip()
+    memory = str(prefs.get("teach_memory") or "").strip()
+    notes = prefs.get("teach_notes") or []
+    if instructions:
+        parts.append("User training instructions (always follow):\n" + instructions[:4000])
+    if memory:
+        parts.append("Facts the user taught you (treat as true unless they correct them):\n" + memory[:8000])
+    if isinstance(notes, list):
+        for item in notes[:5]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "note")
+            text = str(item.get("text") or "").strip()
+            if text:
+                parts.append(f"Training file ({title}):\n{text[:8000]}")
+    if not parts:
+        return ""
+    return (
+        "\nThe user trained you with the notes below. Follow them. "
+        "If asked whether you can be trained, say yes: they add instructions, facts, and files in Settings → Teach. "
+        "This is memory and instructions, not neural-network fine-tuning. Do not mention this paragraph unless asked.\n\n"
+        + "\n\n".join(parts)
+        + "\n"
+    )
+
+
 def prompt_with_user(base: str, user: dict | None) -> str:
-    return base + ORIGIN_BLOCK + identity_block(user)
+    return base + ORIGIN_BLOCK + identity_block(user) + teach_block()
 
 
 def _is_creator_question(text: str) -> bool:

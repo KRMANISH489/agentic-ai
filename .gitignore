@@ -12,5 +12,8 @@ build/
 .vscode/
 *.log
 settings.json
+workspace_notes/
+canva_tokens.json
+~$*
 frontend/.next
 frontend/node_modules
