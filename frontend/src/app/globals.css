@@ -559,6 +559,73 @@
     .landing-card:disabled { opacity: 0.45; cursor: default; }
     .landing-card strong { font-size: 15px; font-weight: 700; }
     .landing-card span { font-size: 12px; color: var(--muted); text-transform: capitalize; }
+    .bg-modal { width: min(520px, 100%); }
+    .bg-preview {
+      position: relative;
+      height: 220px;
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      display: grid;
+      place-items: center;
+    }
+    .bg-preview-back {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .bg-preview img:not(.bg-preview-back) {
+      position: relative;
+      z-index: 1;
+      max-width: 78%;
+      max-height: 88%;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+    .bg-swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .bg-swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+      padding: 0;
+      cursor: pointer;
+    }
+    .bg-swatch.on { border-color: var(--hot); box-shadow: 0 0 0 2px rgba(219, 143, 42, 0.35); }
+    .bg-swatch.custom {
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+    }
+    .bg-swatch.custom input { width: 40px; height: 40px; border: 0; padding: 0; cursor: pointer; }
+    .bg-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .bg-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .bg-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .bg-actions .install { margin-left: auto; }
     .empty.hidden, .setup { display: none; }
     .setup.show {
       display: block;
@@ -899,6 +966,15 @@
       width: 64px;
       height: 64px;
     }
+    .attach-thumb {
+      display: block;
+      width: 64px;
+      height: 64px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
     .attach-preview img {
       width: 64px;
       height: 64px;
@@ -906,7 +982,7 @@
       border-radius: 12px;
       display: block;
     }
-    .attach-preview button {
+    .attach-remove, .attach-preview > button.attach-remove {
       position: absolute;
       top: -6px;
       right: -6px;
@@ -918,6 +994,20 @@
       color: #fff;
       font-size: 14px;
       line-height: 1;
+      cursor: pointer;
+    }
+    .attach-bg {
+      position: absolute;
+      left: 4px;
+      bottom: 4px;
+      border: 0;
+      border-radius: 6px;
+      background: rgba(26, 22, 18, 0.78);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      padding: 2px 5px;
       cursor: pointer;
     }
     .attach-file {

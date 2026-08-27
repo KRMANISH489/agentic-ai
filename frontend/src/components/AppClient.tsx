@@ -5,6 +5,7 @@ import { marked, type Tokens } from "marked";
 import { ArtifactPane } from "@/components/ArtifactPane";
 import { Logo } from "@/components/Logo";
 import { extractArtifacts, type Artifact } from "@/lib/artifacts";
+import { applyPhotoBackground, BG_SWATCHES } from "@/lib/photoBg";
 import type { AppState, ChatItem, ChatMessage, Project, ProjectFile, ToolItem, User } from "@/lib/types";
 
 const STORE_KEY = "agentic.chats.v1";
@@ -117,7 +118,7 @@ async function copyText(text: string) {
   }
 }
 
-type PendingPhoto = { id: string; name: string; dataUrl: string };
+type PendingPhoto = { id: string; name: string; dataUrl: string; originalDataUrl: string };
 type PendingFile = { id: string; name: string; text: string };
 
 function wrapFileBlock(name: string, text: string) {
@@ -357,6 +358,12 @@ export default function AppClient() {
   const [navOpen, setNavOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [landingOpen, setLandingOpen] = useState(false);
+  const [bgEditId, setBgEditId] = useState<string | null>(null);
+  const [bgColor, setBgColor] = useState("#dacebe");
+  const [bgImageUrl, setBgImageUrl] = useState("");
+  const [bgCutout, setBgCutout] = useState(true);
+  const [bgFit, setBgFit] = useState<"contain" | "cover">("contain");
+  const [bgBusy, setBgBusy] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [teachInst, setTeachInst] = useState("");
@@ -376,6 +383,7 @@ export default function AppClient() {
   const voiceFinalRef = useRef("");
   const galleryRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
   const teachFileRef = useRef<HTMLInputElement>(null);
   const projectFileRef = useRef<HTMLInputElement>(null);
   const cameraFileRef = useRef<HTMLInputElement>(null);
@@ -476,6 +484,7 @@ export default function AppClient() {
         setHelpOpen(false);
         setAttachOpen(false);
         setLandingOpen(false);
+        setBgEditId(null);
         closeCamera();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") {
@@ -956,10 +965,12 @@ export default function AppClient() {
     try {
       const next: PendingPhoto[] = [];
       for (const file of list.slice(0, room)) {
+        const dataUrl = await fileToJpeg(file);
         next.push({
           id: crypto.randomUUID(),
           name: file.name || "photo.jpg",
-          dataUrl: await fileToJpeg(file),
+          dataUrl,
+          originalDataUrl: dataUrl,
         });
       }
       setPendingPhotos((prev) => [...prev, ...next].slice(0, 4));
@@ -1032,8 +1043,52 @@ export default function AppClient() {
     closeCamera();
     setPendingPhotos((prev) => {
       if (prev.length >= 4) return prev;
-      return [...prev, { id: crypto.randomUUID(), name: "camera.jpg", dataUrl }];
+      return [...prev, { id: crypto.randomUUID(), name: "camera.jpg", dataUrl, originalDataUrl: dataUrl }];
     });
+  }
+
+  function openBgEditor(photo: PendingPhoto) {
+    setBgEditId(photo.id);
+    setBgColor("#dacebe");
+    setBgImageUrl("");
+    setBgCutout(true);
+    setBgFit("contain");
+  }
+
+  function closeBgEditor() {
+    if (bgImageUrl.startsWith("blob:")) URL.revokeObjectURL(bgImageUrl);
+    setBgImageUrl("");
+    setBgEditId(null);
+    setBgBusy(false);
+  }
+
+  async function applyBgEdit() {
+    const photo = pendingPhotos.find((p) => p.id === bgEditId);
+    if (!photo) return;
+    setBgBusy(true);
+    try {
+      const dataUrl = await applyPhotoBackground({
+        sourceUrl: photo.originalDataUrl || photo.dataUrl,
+        color: bgColor,
+        bgImageUrl: bgImageUrl || undefined,
+        cutout: bgCutout,
+        fit: bgFit,
+      });
+      setPendingPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, dataUrl } : p)));
+      closeBgEditor();
+    } catch (err) {
+      setVoiceHint(err instanceof Error ? err.message : "Could not change the background.");
+      setBgBusy(false);
+    }
+  }
+
+  function resetBgEdit() {
+    const photo = pendingPhotos.find((p) => p.id === bgEditId);
+    if (!photo) return;
+    setPendingPhotos((prev) =>
+      prev.map((p) => (p.id === photo.id ? { ...p, dataUrl: p.originalDataUrl || p.dataUrl } : p))
+    );
+    closeBgEditor();
   }
 
   function speechLang() {
@@ -1885,9 +1940,19 @@ export default function AppClient() {
               <div className="attach-previews">
                 {pendingPhotos.map((photo) => (
                   <div className="attach-preview" key={photo.id}>
-                    <img src={photo.dataUrl} alt="" />
+                    <button type="button" className="attach-thumb" onClick={() => openBgEditor(photo)} title="Change background">
+                      <img src={photo.dataUrl} alt="" />
+                    </button>
                     <button
                       type="button"
+                      className="attach-bg"
+                      onClick={() => openBgEditor(photo)}
+                    >
+                      BG
+                    </button>
+                    <button
+                      type="button"
+                      className="attach-remove"
                       aria-label="Remove photo"
                       onClick={() => setPendingPhotos((prev) => prev.filter((p) => p.id !== photo.id))}
                     >
@@ -1961,6 +2026,19 @@ export default function AppClient() {
                   </button>
                 </div>
               </div>
+              <input
+                ref={bgFileRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  if (bgImageUrl.startsWith("blob:")) URL.revokeObjectURL(bgImageUrl);
+                  setBgImageUrl(URL.createObjectURL(file));
+                }}
+              />
               <input
                 ref={galleryRef}
                 type="file"
@@ -2313,6 +2391,7 @@ export default function AppClient() {
             <p>Ask it to save a markdown note, then open Notes from the profile menu. Ask it to run Python and it uses the code sandbox.</p>
             <p>Ask it to make a webpage or graphic — the result opens in Artifacts on the right.</p>
             <p>Or tap + → Landing page and pick a type (shop, restaurant, portfolio…). It builds that exact page.</p>
+            <p>Attach a photo, tap BG, then change the background color or set another image behind it.</p>
             <p>Use Settings to install tools like Dice or Unit Convert.</p>
             <p>Single agent is best for quick questions. Researcher + Writer is better for long research.</p>
           </div>
@@ -2388,6 +2467,81 @@ export default function AppClient() {
               </button>
             ))}
           </div>
+        </div>
+      </div>
+      <div className={`overlay ${bgEditId ? "open" : ""}`} onClick={(e) => e.target === e.currentTarget && closeBgEditor()}>
+        <div className="settings bg-modal">
+          <div className="settings-head">
+            <h2>Photo background</h2>
+            <button className="close-x" type="button" onClick={closeBgEditor}>
+              ×
+            </button>
+          </div>
+          {(() => {
+            const photo = pendingPhotos.find((p) => p.id === bgEditId);
+            if (!photo) return null;
+            return (
+              <>
+                <div className="bg-preview" style={{ background: bgColor }}>
+                  {bgImageUrl ? <img className="bg-preview-back" src={bgImageUrl} alt="" /> : null}
+                  <img src={photo.originalDataUrl || photo.dataUrl} alt="" />
+                </div>
+                <p className="landing-lead">Change the color, or put another image behind this photo. Then Apply.</p>
+                <div className="bg-swatches">
+                  {BG_SWATCHES.map((hex) => (
+                    <button
+                      key={hex}
+                      type="button"
+                      className={`bg-swatch ${bgColor === hex ? "on" : ""}`}
+                      style={{ background: hex }}
+                      aria-label={hex}
+                      onClick={() => setBgColor(hex)}
+                    />
+                  ))}
+                  <label className="bg-swatch custom">
+                    <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
+                  </label>
+                </div>
+                <div className="bg-row">
+                  <label className="bg-check">
+                    <input type="checkbox" checked={bgCutout} onChange={(e) => setBgCutout(e.target.checked)} />
+                    Cut out old background
+                  </label>
+                  <div className="artifact-toggle">
+                    <button type="button" className={bgFit === "contain" ? "on" : ""} onClick={() => setBgFit("contain")}>
+                      Fit
+                    </button>
+                    <button type="button" className={bgFit === "cover" ? "on" : ""} onClick={() => setBgFit("cover")}>
+                      Fill
+                    </button>
+                  </div>
+                </div>
+                <div className="bg-actions">
+                  <button type="button" className="remove" onClick={() => bgFileRef.current?.click()}>
+                    {bgImageUrl ? "Change BG image" : "Set BG image"}
+                  </button>
+                  {bgImageUrl ? (
+                    <button
+                      type="button"
+                      className="remove"
+                      onClick={() => {
+                        if (bgImageUrl.startsWith("blob:")) URL.revokeObjectURL(bgImageUrl);
+                        setBgImageUrl("");
+                      }}
+                    >
+                      Clear image
+                    </button>
+                  ) : null}
+                  <button type="button" className="remove" onClick={resetBgEdit}>
+                    Reset
+                  </button>
+                  <button type="button" className="install" disabled={bgBusy} onClick={() => void applyBgEdit()}>
+                    {bgBusy ? "Applying…" : "Apply"}
+                  </button>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
