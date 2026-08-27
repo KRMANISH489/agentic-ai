@@ -493,7 +493,7 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
                 photos = [
                     url
                     for url in req.images[:4]
-                    if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
+                    if isinstance(url, str) and url.startswith("data:image/") and len(url) < 4_000_000
                 ]
                 if req.mode == "crew" and _crew is not None:
                     _crew.researcher.load_transcript(transcript)

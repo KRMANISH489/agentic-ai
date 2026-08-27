@@ -362,8 +362,10 @@ export default function AppClient() {
   const [bgColor, setBgColor] = useState("#dacebe");
   const [bgImageUrl, setBgImageUrl] = useState("");
   const [bgCutout, setBgCutout] = useState(true);
+  const [bgTransparent, setBgTransparent] = useState(false);
   const [bgFit, setBgFit] = useState<"contain" | "cover">("contain");
   const [bgBusy, setBgBusy] = useState(false);
+  const [bgPreviewUrl, setBgPreviewUrl] = useState("");
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [teachInst, setTeachInst] = useState("");
@@ -443,6 +445,38 @@ export default function AppClient() {
     setTeachInst(appState.prefs?.teach_instructions || "");
     setTeachMem(appState.prefs?.teach_memory || "");
   }, [settingsOpen, appState.prefs?.teach_instructions, appState.prefs?.teach_memory]);
+
+  useEffect(() => {
+    if (!bgEditId) {
+      setBgPreviewUrl("");
+      return;
+    }
+    const photo = pendingPhotos.find((p) => p.id === bgEditId);
+    if (!photo) return;
+    const source = photo.originalDataUrl || photo.dataUrl;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void applyPhotoBackground({
+        sourceUrl: source,
+        color: bgColor,
+        bgImageUrl: bgImageUrl || undefined,
+        cutout: bgCutout,
+        transparentOnly: bgTransparent,
+        fit: bgFit,
+        fast: true,
+      })
+        .then((result) => {
+          if (!cancelled) setBgPreviewUrl(result.dataUrl);
+        })
+        .catch(() => {
+          if (!cancelled) setBgPreviewUrl(source);
+        });
+    }, 80);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [bgEditId, bgColor, bgImageUrl, bgCutout, bgTransparent, bgFit, pendingPhotos]);
 
   useEffect(() => {
     async function boot() {
@@ -1052,6 +1086,7 @@ export default function AppClient() {
     setBgColor("#dacebe");
     setBgImageUrl("");
     setBgCutout(true);
+    setBgTransparent(false);
     setBgFit("contain");
   }
 
@@ -1060,21 +1095,52 @@ export default function AppClient() {
     setBgImageUrl("");
     setBgEditId(null);
     setBgBusy(false);
+    setBgPreviewUrl("");
+  }
+
+  async function downloadBgEdit() {
+    const photo = pendingPhotos.find((p) => p.id === bgEditId);
+    if (!photo) return;
+    setBgBusy(true);
+    setVoiceHint(bgCutout ? "Making the photo transparent… first time can take a minute." : "");
+    try {
+      const result = await applyPhotoBackground({
+        sourceUrl: photo.originalDataUrl || photo.dataUrl,
+        color: bgColor,
+        bgImageUrl: bgImageUrl || undefined,
+        cutout: bgCutout,
+        transparentOnly: bgTransparent,
+        fit: bgFit,
+      });
+      setPendingPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, dataUrl: result.dataUrl } : p)));
+      const a = document.createElement("a");
+      a.href = result.dataUrl;
+      a.download = `${photo.name.replace(/\.[^.]+$/, "") || "photo"}-bg.${result.ext}`;
+      a.click();
+      setVoiceHint("");
+    } catch (err) {
+      setVoiceHint(err instanceof Error ? err.message : "Could not download that photo.");
+    } finally {
+      setBgBusy(false);
+    }
   }
 
   async function applyBgEdit() {
     const photo = pendingPhotos.find((p) => p.id === bgEditId);
     if (!photo) return;
     setBgBusy(true);
+    setVoiceHint(bgCutout ? "Making the photo transparent… first time can take a minute." : "");
     try {
-      const dataUrl = await applyPhotoBackground({
+      const result = await applyPhotoBackground({
         sourceUrl: photo.originalDataUrl || photo.dataUrl,
         color: bgColor,
         bgImageUrl: bgImageUrl || undefined,
         cutout: bgCutout,
+        transparentOnly: bgTransparent,
         fit: bgFit,
       });
-      setPendingPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, dataUrl } : p)));
+      setPendingPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, dataUrl: result.dataUrl } : p)));
+      setVoiceHint("");
       closeBgEditor();
     } catch (err) {
       setVoiceHint(err instanceof Error ? err.message : "Could not change the background.");
@@ -2389,7 +2455,7 @@ export default function AppClient() {
             <p>Attach a PDF or text file in chat, or train it in Settings → Teach with instructions, facts, and files.</p>
             <p>Open a Project in the sidebar to keep chats, files, and standing instructions together.</p>
             <p>Ask it to save a markdown note, then open Notes from the profile menu. Ask it to run Python and it uses the code sandbox.</p>
-            <p>Ask it to make a webpage or graphic — the result opens in Artifacts on the right.</p>
+            <p>Ask it to make a webpage or graphic — the result opens in Artifacts on the right. Tap Download to save the HTML file.</p>
             <p>Or tap + → Landing page and pick a type (shop, restaurant, portfolio…). It builds that exact page.</p>
             <p>Attach a photo, tap BG, then change the background color or set another image behind it.</p>
             <p>Use Settings to install tools like Dice or Unit Convert.</p>
@@ -2482,11 +2548,19 @@ export default function AppClient() {
             if (!photo) return null;
             return (
               <>
-                <div className="bg-preview" style={{ background: bgColor }}>
-                  {bgImageUrl ? <img className="bg-preview-back" src={bgImageUrl} alt="" /> : null}
-                  <img src={photo.originalDataUrl || photo.dataUrl} alt="" />
+                <div className={`bg-preview ${bgTransparent ? "checkered" : ""}`} style={bgTransparent ? undefined : { background: bgColor }}>
+                  {bgPreviewUrl ? (
+                    <img className="bg-preview-result" src={bgPreviewUrl} alt="" />
+                  ) : (
+                    <>
+                      {bgImageUrl ? <img className="bg-preview-back" src={bgImageUrl} alt="" /> : null}
+                      <img src={photo.originalDataUrl || photo.dataUrl} alt="" />
+                    </>
+                  )}
                 </div>
-                <p className="landing-lead">Change the color, or put another image behind this photo. Then Apply.</p>
+                <p className="landing-lead">
+                  Turn the photo transparent so the new color or background image shows through cleanly. First time can take a minute.
+                </p>
                 <div className="bg-swatches">
                   {BG_SWATCHES.map((hex) => (
                     <button
@@ -2502,11 +2576,25 @@ export default function AppClient() {
                     <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
                   </label>
                 </div>
-                <div className="bg-row">
+                <div className="bg-checks">
                   <label className="bg-check">
                     <input type="checkbox" checked={bgCutout} onChange={(e) => setBgCutout(e.target.checked)} />
-                    Cut out old background
+                    Make image transparent
                   </label>
+                  <label className="bg-check">
+                    <input
+                      type="checkbox"
+                      checked={bgTransparent}
+                      onChange={(e) => {
+                        setBgTransparent(e.target.checked);
+                        if (e.target.checked) setBgCutout(true);
+                      }}
+                    />
+                    Save as transparent PNG
+                  </label>
+                </div>
+                <div className="bg-row">
+                  <span className="bg-fit-label">Background fit</span>
                   <div className="artifact-toggle">
                     <button type="button" className={bgFit === "contain" ? "on" : ""} onClick={() => setBgFit("contain")}>
                       Fit
@@ -2535,8 +2623,11 @@ export default function AppClient() {
                   <button type="button" className="remove" onClick={resetBgEdit}>
                     Reset
                   </button>
+                  <button type="button" className="remove" disabled={bgBusy} onClick={() => void downloadBgEdit()}>
+                    Download
+                  </button>
                   <button type="button" className="install" disabled={bgBusy} onClick={() => void applyBgEdit()}>
-                    {bgBusy ? "Applying…" : "Apply"}
+                    {bgBusy ? (bgCutout ? "Making transparent…" : "Applying…") : "Apply"}
                   </button>
                 </div>
               </>

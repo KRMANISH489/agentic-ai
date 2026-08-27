@@ -56,6 +56,35 @@ export function ArtifactPane({
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
 
+  function downloadFile() {
+    const slug = active.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "artifact";
+    let name = `${slug}.txt`;
+    let body = active.content;
+    let mime = "text/plain;charset=utf-8";
+    if (active.type === "html") {
+      name = `${slug}.html`;
+      body = htmlDocument(active.content);
+      mime = "text/html;charset=utf-8";
+    } else if (active.type === "svg") {
+      name = `${slug}.svg`;
+      body = active.content.trim().startsWith("<svg") ? active.content : svgDocument(active.content);
+      mime = "image/svg+xml;charset=utf-8";
+    } else if (active.type === "markdown") {
+      name = `${slug}.md`;
+      mime = "text/markdown;charset=utf-8";
+    } else {
+      const lang = (active.language || "txt").replace(/[^a-z0-9]/gi, "") || "txt";
+      name = `${slug}.${lang === "javascript" ? "js" : lang === "typescript" ? "ts" : lang === "python" ? "py" : lang}`;
+    }
+    const blob = new Blob([body], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   return (
     <aside className="artifact-pane" aria-label="Artifacts">
       <header className="artifact-head">
@@ -76,6 +105,9 @@ export function ArtifactPane({
           ) : null}
           <button type="button" className="artifact-icon" onClick={() => void copyContent()} title="Copy">
             Copy
+          </button>
+          <button type="button" className="artifact-icon download" onClick={downloadFile} title="Download file">
+            Download
           </button>
           <button type="button" className="artifact-icon" onClick={openTab} title="Open in new tab">
             Open
