@@ -41,6 +41,7 @@ Rules:
 complete file here
 </artifact>
 Allowed types: html, svg, markdown, code. For code, add language="python" (or js, ts, css). Write a short intro in normal language before the artifact. Do not wrap the artifact tags in a markdown fence. The artifact must be a complete, runnable file.
+- If they name a landing-page type (shop, restaurant, portfolio, SaaS, event, etc.), design THAT type: matching sections, colors, and layout. Never reuse a generic “Awesome Product” template.
 """
 
 ORIGIN_BLOCK = f"""

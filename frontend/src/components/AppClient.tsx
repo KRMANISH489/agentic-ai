@@ -14,6 +14,34 @@ const MODE_LABELS: Record<string, string> = {
   crew: "Researcher + Writer",
 };
 
+const LANDING_TYPES = [
+  { id: "saas", title: "SaaS / product", sections: "nav, hero, logos, feature grid, how it works, pricing, testimonials, FAQ, strong CTA footer" },
+  { id: "shop", title: "Shop / store", sections: "nav, offer banner, featured products, categories, reviews, WhatsApp/order CTA, footer with hours" },
+  { id: "restaurant", title: "Restaurant / cafe", sections: "hero, menu highlights, about the kitchen, reservation or WhatsApp, location/hours, Instagram strip, footer" },
+  { id: "portfolio", title: "Portfolio", sections: "name/intro, selected work grid, case-study teasers, skills, contact form, footer" },
+  { id: "agency", title: "Agency / studio", sections: "bold hero, services, process, case studies, team, contact CTA, footer" },
+  { id: "event", title: "Event / wedding", sections: "date countdown feel, story, schedule, venue, RSVP/form, gallery, footer" },
+  { id: "app", title: "Mobile app", sections: "phone mock hero, features, screenshots, download badges, reviews, FAQ, footer" },
+  { id: "course", title: "Course / coaching", sections: "promise hero, curriculum, instructor, testimonials, pricing, enroll CTA, FAQ" },
+  { id: "realestate", title: "Real estate", sections: "search-style hero, featured listings, neighborhoods, agent bio, inquiry form, footer" },
+  { id: "fashion", title: "Fashion / brand", sections: "full-bleed lookbook hero, collections, editorial story, shop CTA, newsletter, footer" },
+  { id: "fitness", title: "Gym / fitness", sections: "energy hero, class timetable, trainers, memberships, trial CTA, footer" },
+  { id: "ngo", title: "Nonprofit / NGO", sections: "mission hero, impact numbers, programs, stories, donate CTA, footer" },
+];
+
+function landingPrompt(kind: (typeof LANDING_TYPES)[number], lang: string) {
+  const speak =
+    lang === "hi" ? "Write visible page copy in Hindi." : lang === "bho" ? "Write visible page copy in Bhojpuri." : "Write visible page copy in English.";
+  return [
+    `Create a complete landing page of this exact type: ${kind.title}.`,
+    `Sections to include: ${kind.sections}.`,
+    "One self-contained HTML file with CSS inside a <style> tag. No external CSS/JS frameworks or stock Unsplash URLs that 404 — use CSS gradients, shapes, and placeholder blocks instead of broken images.",
+    "Mobile-first and desktop layouts. Distinct look for this type — do not reuse a generic “Awesome Product” SaaS template.",
+    speak,
+    'Put the full file in an artifact: <artifact type="html" title="' + kind.title + ' landing"> ... </artifact>',
+  ].join(" ");
+}
+
 function titleFrom(text: string) {
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > 42 ? `${clean.slice(0, 42)}…` : clean || "New chat";
@@ -328,6 +356,7 @@ export default function AppClient() {
   const [voiceHint, setVoiceHint] = useState("");
   const [navOpen, setNavOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [landingOpen, setLandingOpen] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [teachInst, setTeachInst] = useState("");
@@ -446,6 +475,7 @@ export default function AppClient() {
         setSettingsOpen(false);
         setHelpOpen(false);
         setAttachOpen(false);
+        setLandingOpen(false);
         closeCamera();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") {
@@ -896,6 +926,17 @@ export default function AppClient() {
     const { item, copy } = ensureChat(caption, chats);
     const history = item.messages.map((m) => ({ role: m.role, content: m.content }));
     await runChatTurn(prompt, history, item, copy, undefined, false, photos);
+  }
+
+  function openLandingPicker() {
+    if (sending) return;
+    setAttachOpen(false);
+    setLandingOpen(true);
+  }
+
+  function requestLanding(kind: (typeof LANDING_TYPES)[number]) {
+    setLandingOpen(false);
+    void sendMessage(undefined, landingPrompt(kind, lang));
   }
 
   function closeCamera() {
@@ -1694,6 +1735,11 @@ export default function AppClient() {
                   <Logo large twinkle />
                   <h2>Ready to leap{user?.name ? `, ${user.name.trim().split(/\s+/)[0]}` : ""}?</h2>
                   <p>Jump in with a question, a file, or a project.</p>
+                  <div className="start-chips">
+                    <button type="button" disabled={sending} onClick={openLandingPicker}>
+                      Make a landing page
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="chat" onClick={onChatClick}>
@@ -1903,6 +1949,15 @@ export default function AppClient() {
                     }}
                   >
                     Upload file
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachOpen(false);
+                      openLandingPicker();
+                    }}
+                  >
+                    Landing page
                   </button>
                 </div>
               </div>
@@ -2257,6 +2312,7 @@ export default function AppClient() {
             <p>Open a Project in the sidebar to keep chats, files, and standing instructions together.</p>
             <p>Ask it to save a markdown note, then open Notes from the profile menu. Ask it to run Python and it uses the code sandbox.</p>
             <p>Ask it to make a webpage or graphic — the result opens in Artifacts on the right.</p>
+            <p>Or tap + → Landing page and pick a type (shop, restaurant, portfolio…). It builds that exact page.</p>
             <p>Use Settings to install tools like Dice or Unit Convert.</p>
             <p>Single agent is best for quick questions. Researcher + Writer is better for long research.</p>
           </div>
@@ -2306,6 +2362,31 @@ export default function AppClient() {
                 <p className="history-empty">Pick a note to read it here.</p>
               )}
             </div>
+          </div>
+        </div>
+      </div>
+      <div className={`overlay ${landingOpen ? "open" : ""}`} onClick={(e) => e.target === e.currentTarget && setLandingOpen(false)}>
+        <div className="settings landing-modal">
+          <div className="settings-head">
+            <h2>Landing page</h2>
+            <button className="close-x" type="button" onClick={() => setLandingOpen(false)}>
+              ×
+            </button>
+          </div>
+          <p className="landing-lead">Pick the type. It will generate a full page for that style — not a generic template.</p>
+          <div className="landing-grid">
+            {LANDING_TYPES.map((kind) => (
+              <button
+                key={kind.id}
+                type="button"
+                className="landing-card"
+                disabled={sending}
+                onClick={() => requestLanding(kind)}
+              >
+                <strong>{kind.title}</strong>
+                <span>{kind.sections.split(",")[0].trim()}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
