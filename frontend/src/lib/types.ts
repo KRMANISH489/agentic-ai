@@ -52,7 +52,7 @@ export type Prefs = {
   installed_tools?: string[];
   teach_instructions?: string;
   teach_memory?: string;
-  teach_notes?: { id: string; title: string; text: string }[];
+  teach_notes?: { id: string; title: string; text: string; builtin?: boolean }[];
 };
 
 export type AppState = {

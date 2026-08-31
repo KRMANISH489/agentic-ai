@@ -6,6 +6,8 @@ from pathlib import Path
 from agentic_ai.config import ROOT_DIR
 
 PREFS_PATH = ROOT_DIR / "settings.json"
+PLAYBOOK_PATH = ROOT_DIR / "IT_Teach_Playbook.txt"
+PLAYBOOK_ID = "it-teach-playbook"
 APP_VERSION = "1.6.0"
 
 CORE_TOOLS = [
@@ -31,6 +33,38 @@ DEFAULT_PREFS = {
     "teach_memory": "",
     "teach_notes": [],
 }
+
+
+def builtin_playbook() -> dict | None:
+    if not PLAYBOOK_PATH.exists():
+        return None
+    try:
+        text = PLAYBOOK_PATH.read_text(encoding="utf-8").strip()[:12000]
+    except OSError:
+        return None
+    if not text:
+        return None
+    return {
+        "id": PLAYBOOK_ID,
+        "title": "IT Teach Playbook",
+        "text": text,
+        "builtin": True,
+    }
+
+
+def _is_playbook_note(item: dict) -> bool:
+    if str(item.get("id") or "") == PLAYBOOK_ID:
+        return True
+    title = str(item.get("title") or "").lower().replace(" ", "")
+    return "itteachplaybook" in title or title.startswith("it_teach_playbook")
+
+
+def merge_teach_notes(notes: list) -> list:
+    book = builtin_playbook()
+    rest = [item for item in notes if isinstance(item, dict) and not _is_playbook_note(item)]
+    if not book:
+        return rest[:5]
+    return [book] + rest[:4]
 
 
 def load_prefs() -> dict:
@@ -68,7 +102,7 @@ def load_prefs() -> dict:
             note_id = str(item.get("id") or title)
             if text:
                 cleaned.append({"id": note_id, "title": title or "Note", "text": text})
-    data["teach_notes"] = cleaned
+    data["teach_notes"] = merge_teach_notes(cleaned)
     if data.get("default_mode") not in {"agent", "crew"}:
         data["default_mode"] = "agent"
     return data
@@ -77,5 +111,8 @@ def load_prefs() -> dict:
 def save_prefs(updates: dict) -> dict:
     data = load_prefs()
     data.update(updates)
+    notes = data.get("teach_notes") or []
+    if isinstance(notes, list):
+        data["teach_notes"] = [item for item in notes if isinstance(item, dict) and not _is_playbook_note(item)][:5]
     PREFS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return load_prefs()

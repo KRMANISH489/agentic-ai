@@ -2421,7 +2421,7 @@ export default function AppClient() {
                 <div className="row">
                   <div>
                     <label>Training files</label>
-                    <p>Upload PDF, Word, or text. Up to 5 files. The AI will study them on every chat.</p>
+                    <p>The IT teaching playbook is already on. Add extra PDF, Word, or text if you want — up to 4 more files.</p>
                   </div>
                   <button type="button" className="install" disabled={teachBusy} onClick={() => teachFileRef.current?.click()}>
                     Add file
@@ -2441,10 +2441,14 @@ export default function AppClient() {
                   <ul className="teach-list">
                     {(prefs.teach_notes || []).map((note) => (
                       <li key={note.id}>
-                        <span>{note.title}</span>
-                        <button type="button" className="remove" onClick={() => void forgetTeach(note.id)}>
-                          Forget
-                        </button>
+                        <span>{note.title}{note.builtin ? " · always on" : ""}</span>
+                        {note.builtin ? (
+                          <span className="teach-on">Built-in</span>
+                        ) : (
+                          <button type="button" className="remove" onClick={() => void forgetTeach(note.id)}>
+                            Forget
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>

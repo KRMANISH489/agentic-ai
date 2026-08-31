@@ -413,6 +413,7 @@ async def teach_upload(file: UploadFile = File(...), _user: dict = Depends(requi
     prefs = load_prefs()
     notes = list(prefs.get("teach_notes") or [])
     notes.append({"id": str(uuid.uuid4()), "title": Path(name).name[:80], "text": text[:12000]})
+    notes = [item for item in notes if str(item.get("id")) != "it-teach-playbook"]
     save_prefs({"teach_notes": notes[-5:]})
     with _lock:
         _rebuild_agents()
@@ -421,6 +422,8 @@ async def teach_upload(file: UploadFile = File(...), _user: dict = Depends(requi
 
 @app.post("/api/teach/forget")
 def teach_forget(req: TeachForget, _user: dict = Depends(require_user)) -> dict:
+    if req.id == "it-teach-playbook":
+        return _status_payload()
     prefs = load_prefs()
     notes = [item for item in (prefs.get("teach_notes") or []) if str(item.get("id")) != req.id]
     save_prefs({"teach_notes": notes})
