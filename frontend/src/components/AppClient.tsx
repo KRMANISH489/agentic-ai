@@ -2475,7 +2475,7 @@ export default function AppClient() {
                 <dt>Author</dt>
                 <dd>Abhishek Mishra</dd>
                 <dt>Version</dt>
-                <dd>Agentic {appState.version || "1.6.0"}</dd>
+                <dd>Agentic {appState.version || "1.7.0"}</dd>
                 <dt>Provider</dt>
                 <dd>{appState.provider || "not connected"}</dd>
                 <dt>Model</dt>

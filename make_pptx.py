@@ -19,7 +19,7 @@ W = Inches(13.333)
 H = Inches(7.5)
 OUT = "Agentic_AI_Presentation.pptx"
 TOTAL = 22
-VERSION = "v1.6.0"
+VERSION = "v1.7.0"
 
 
 def set_run(run, size=18, bold=False, color=INK, font="Calibri"):
@@ -192,7 +192,7 @@ def main():
             "What Agentic AI is, and how it differs from a normal chatbot",
             "The problem it solves and the benefits for a student, shop, or team",
             "Architecture: Next.js UI + FastAPI agent + Groq LLM",
-            "Every feature in v1.6.0 — chat, files, Teach, Projects, Notes, sandbox, artifacts",
+            "Every feature in v1.7.0 — chat, Code mode, files, Teach, Projects, Notes, sandbox, artifacts",
             "How the ReAct loop thinks, calls tools, and answers",
             "How to run it locally, demo it, and what this project is not",
         ],
@@ -310,7 +310,7 @@ def main():
 
     content_slide(
         prs,
-        "Feature map — what v1.6.0 can do",
+        "Feature map — what v1.7.0 can do",
         [
             "Chat: markdown, Recents search, edit a sent message, Retry, Export chat as .md",
             "Voice: microphone in, speaker out, English / Hindi / Bhojpuri",
@@ -553,7 +553,7 @@ def main():
     textbox(s, Inches(0.85), Inches(5.75), Inches(11), Inches(0.35), "Live: https://agentic-ai-d0cx.onrender.com", 16, False, MUTED)
 
     saved = []
-    for path in (OUT, "Agentic_AI_Full_Briefing_v1.6.pptx"):
+    for path in (OUT, "Agentic_AI_Full_Briefing_v1.7.pptx"):
         try:
             prs.save(path)
             saved.append(path)

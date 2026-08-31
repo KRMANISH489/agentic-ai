@@ -8,7 +8,7 @@ from agentic_ai.config import ROOT_DIR
 PREFS_PATH = ROOT_DIR / "settings.json"
 PLAYBOOK_PATH = ROOT_DIR / "IT_Teach_Playbook.txt"
 PLAYBOOK_ID = "it-teach-playbook"
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.7.0"
 
 CORE_TOOLS = [
     "calculator",
