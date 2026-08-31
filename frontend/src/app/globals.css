@@ -559,101 +559,6 @@
     .landing-card:disabled { opacity: 0.45; cursor: default; }
     .landing-card strong { font-size: 15px; font-weight: 700; }
     .landing-card span { font-size: 12px; color: var(--muted); text-transform: capitalize; }
-    .bg-modal { width: min(520px, 100%); }
-    .bg-preview {
-      position: relative;
-      height: 220px;
-      border-radius: 14px;
-      overflow: hidden;
-      margin-bottom: 12px;
-      display: grid;
-      place-items: center;
-    }
-    .bg-preview.checkered,
-    .attach-preview {
-      background-image:
-        linear-gradient(45deg, rgba(26, 22, 18, 0.12) 25%, transparent 25%),
-        linear-gradient(-45deg, rgba(26, 22, 18, 0.12) 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, rgba(26, 22, 18, 0.12) 75%),
-        linear-gradient(-45deg, transparent 75%, rgba(26, 22, 18, 0.12) 75%);
-      background-size: 16px 16px;
-      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-    }
-    .bg-preview-result {
-      position: relative;
-      z-index: 1;
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-    }
-    .bg-checks {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-    .bg-fit-label {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-    }
-    .bg-preview-back {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .bg-preview img:not(.bg-preview-back):not(.bg-preview-result) {
-      position: relative;
-      z-index: 1;
-      max-width: 78%;
-      max-height: 88%;
-      object-fit: contain;
-      border-radius: 8px;
-    }
-    .bg-swatches {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-    .bg-swatch {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 2px solid var(--line);
-      padding: 0;
-      cursor: pointer;
-    }
-    .bg-swatch.on { border-color: var(--hot); box-shadow: 0 0 0 2px rgba(219, 143, 42, 0.35); }
-    .bg-swatch.custom {
-      overflow: hidden;
-      display: grid;
-      place-items: center;
-      background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
-    }
-    .bg-swatch.custom input { width: 40px; height: 40px; border: 0; padding: 0; cursor: pointer; }
-    .bg-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .bg-check {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .bg-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .bg-actions .install { margin-left: auto; }
     .empty.hidden, .setup { display: none; }
     .setup.show {
       display: block;
@@ -714,7 +619,7 @@
       word-break: break-word;
       box-shadow: 0 0 0 1px var(--line);
       font-family: var(--font-ui), Figtree, sans-serif;
-      font-size: 19px;
+      font-size: 16px;
       font-weight: 500;
       line-height: 1.55;
     }
@@ -815,8 +720,8 @@
       max-width: 100%;
     }
     .md {
-      line-height: 1.7;
-      font-size: 19px;
+      line-height: 1.65;
+      font-size: 16px;
       font-weight: 500;
       min-width: 0;
       max-width: 100%;
@@ -824,13 +729,53 @@
       word-break: break-word;
       font-family: var(--font-ui), Figtree, sans-serif;
     }
+    .md-table-wrap {
+      overflow-x: auto;
+      margin: 0 0 14px;
+      max-width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--white);
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+    .md table {
+      width: 100%;
+      min-width: 360px;
+      border-collapse: collapse;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .md th, .md td {
+      padding: 8px 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    .md th {
+      background: var(--hover);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .md td:first-child, .md th:first-child {
+      font-weight: 700;
+      white-space: nowrap;
+      color: var(--ink);
+    }
+    .md tr:last-child td { border-bottom: 0; }
+    .md tbody tr:nth-child(even) td { background: rgba(218, 206, 190, 0.28); }
     .md h1, .md h2, .md h3 {
       font-family: var(--font-display), Fraunces, Georgia, serif;
       font-weight: 600;
       letter-spacing: -0.02em;
       line-height: 1.25;
     }
-    .md p { margin: 0 0 10px; }
+    .md.stream-draft {
+      white-space: pre-wrap;
+    }
     .md p:last-child { margin-bottom: 0; }
     .md ul, .md ol { margin: 0 0 10px; padding-left: 20px; }
     .md :not(pre) > code {
@@ -953,7 +898,7 @@
       background: transparent;
       color: var(--ink);
       font-weight: 500;
-      font-size: 19px;
+      font-size: 16px;
       font-family: var(--font-ui), Figtree, sans-serif;
       padding: 10px 0;
     }
@@ -1029,7 +974,8 @@
       padding: 0;
       border: 0;
       background: transparent;
-      cursor: pointer;
+      overflow: hidden;
+      border-radius: 12px;
     }
     .attach-preview img {
       width: 64px;
@@ -1050,20 +996,6 @@
       color: #fff;
       font-size: 14px;
       line-height: 1;
-      cursor: pointer;
-    }
-    .attach-bg {
-      position: absolute;
-      left: 4px;
-      bottom: 4px;
-      border: 0;
-      border-radius: 6px;
-      background: rgba(26, 22, 18, 0.78);
-      color: #fff;
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      padding: 2px 5px;
       cursor: pointer;
     }
     .attach-file {

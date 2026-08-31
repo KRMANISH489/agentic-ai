@@ -10,7 +10,7 @@ from openai import APIStatusError
 from agentic_ai.config import load_settings
 from agentic_ai.llm import LLM
 from agentic_ai.memory import Memory
-from agentic_ai.prefs import load_prefs
+from agentic_ai.prefs import PLAYBOOK_BRIEF, PLAYBOOK_ID, load_prefs
 from agentic_ai.tools import Tool, ToolRegistry, tools_by_names
 
 TraceCallback = Callable[[str], None]
@@ -22,20 +22,23 @@ DEFAULT_SYSTEM = """You are a capable Agentic AI assistant.
 
 You solve tasks by thinking, then using tools when they improve accuracy.
 Rules:
-- Prefer tools for live facts, weather, gold/prices, calculations, time, and research.
+- Answer in one pass. Do not call tools unless you need live data.
+- Tools are only for weather, gold/prices, current time/date, today's news, web/Wikipedia facts you cannot know, notes_write, calculator, or code_run when they asked to run Python.
 - If the user already named a city or location, use it immediately. Do not ask for it again.
 - After a tool returns data, write a clear final answer for the user.
 - Final answers are normal language. Never output JSON, tool traces, or raw search dumps.
 - Greetings and one-line facts stay brief. Do not pad those.
+- Keep answers tight. Skip extra sections the user did not ask for.
 - IT / programming / CS questions (any language, framework, API, database, DevOps, or “X vs Y”): teach like a patient friend so a beginner can repeat it. Even a short line like “define” or “vs” still gets a full lesson. Order:
   1) a daily-life analogy first (house address, shop order, WhatsApp chat — not jargon),
   2) the simple meaning in plain words (Hindi/Hinglish if they wrote that way),
   3) why it exists / when to use it,
   4) how it works, with a real URL or tiny example,
-  5) a comparison table if they asked vs / difference,
-  6) working code in markdown fences (the language they named; if they did not name one, show both JavaScript and Python/FastAPI when it fits),
+  5) a comparison table if they asked vs / difference. Use a real GitHub markdown table with a header row and a | --- | --- | separator so it renders as a grid, not a pile of pipes,
+  6) working code in markdown fences (the language they named; if they did not name one, pick one — Python or JavaScript — not both unless they asked),
   7) one common mistake in plain words, then a 2–3 line recap they can remember.
   Never start with textbook jargon. If you must use a technical word, give the simple meaning in the same sentence. Put teaching snippets in the chat as fenced code. Do not hide them in artifacts. Keep code identifiers in English even if you explain in Hindi or Bhojpuri.
+  Do not use tools for textbook IT.
 - HTML/SVG/full downloadable files the user asked you to build belong inside <artifact> tags, not as dumped pages in chat.
 - Cite sources as names/URLs in the final answer. Do not invent numbers or URLs.
 - If a tool fails, try a different query or another tool before giving up.
@@ -99,10 +102,8 @@ def identity_block(user: dict | None) -> str:
 
 
 def teach_block() -> str:
-    from agentic_ai.prefs import load_prefs
-
     prefs = load_prefs()
-    parts: list[str] = []
+    parts: list[str] = [PLAYBOOK_BRIEF]
     instructions = str(prefs.get("teach_instructions") or "").strip()
     memory = str(prefs.get("teach_memory") or "").strip()
     notes = prefs.get("teach_notes") or []
@@ -114,12 +115,12 @@ def teach_block() -> str:
         for item in notes[:5]:
             if not isinstance(item, dict):
                 continue
+            if str(item.get("id") or "") == PLAYBOOK_ID:
+                continue
             title = str(item.get("title") or "note")
             text = str(item.get("text") or "").strip()
             if text:
                 parts.append(f"Training file ({title}):\n{text[:8000]}")
-    if not parts:
-        return ""
     return (
         "\nThe user trained you with the notes below. Follow them. "
         "If asked whether you can be trained, say yes: they add instructions, facts, and files in Settings → Teach. "
@@ -164,6 +165,28 @@ def _creator_reply(user_message: str) -> str:
     )
 
 
+_LIVE_DATA_RE = re.compile(
+    r"""(?ix)
+    \b(
+      weather|baarish|mausam|forecast|
+      \bgold\b|\bsona\b|silver|share\s+price|stock\s+price|
+      (latest|breaking)\s+news|aaj\s+ki\s+khabar|
+      wikipedia|
+      (what'?s|what\s+is|kya)\s+the\s+time|current\s+time|kitna\s+baja|
+      search\s+(the\s+)?(web|google|online)|
+      save\s+(a\s+)?note|notes_write|
+      run\s+(this\s+)?(code|python)|code_run
+    )\b
+    """
+)
+
+
+def _needs_tools(text: str) -> bool:
+    body = re.sub(r"\n\nReply in (Hindi|Bhojpuri)\.\s*$", "", text or "")
+    body = re.sub(r"\n\nCODE MODE is on[\s\S]*$", "", body)
+    return bool(_LIVE_DATA_RE.search(body))
+
+
 class Agent:
     """ReAct-style agent: reason → call tools → observe → repeat → answer."""
 
@@ -187,7 +210,12 @@ class Agent:
         self.temperature = float(prefs.get("temperature") or 0.2)
         self.on_trace = on_trace or (lambda _: None)
 
-    def ask(self, user_message: str, images: list[str] | None = None) -> str:
+    def ask(
+        self,
+        user_message: str,
+        images: list[str] | None = None,
+        on_token: Callable[[str], None] | None = None,
+    ) -> str:
         text = (user_message or "").strip() or "Describe this image and answer any question about it."
         safe_images = [
             url
@@ -206,12 +234,14 @@ class Agent:
             self.memory.messages.append({"role": "user", "content": parts})
         else:
             self.memory.add("user", text)
-        schemas = self.tools.schemas()
+        use_tools = _needs_tools(text) and not safe_images
+        schemas = self.tools.schemas() if use_tools else []
         model = self.llm.settings.vision_model if safe_images else None
         dropped_tools = False
         vision_fallback_i = 0
+        steps = 1 if not use_tools else self.max_steps
 
-        for step in range(1, self.max_steps + 1):
+        for step in range(1, steps + 1):
             self.on_trace(f"thinking:{step}")
             try:
                 response = self.llm.chat(
@@ -219,6 +249,7 @@ class Agent:
                     tools=schemas or None,
                     temperature=self.temperature,
                     model=model,
+                    on_delta=on_token if not schemas else None,
                 )
             except APIStatusError as exc:
                 if safe_images and _is_model_missing(exc):
@@ -296,7 +327,7 @@ class Agent:
 
     def load_transcript(self, turns: list[dict[str, Any]]) -> None:
         self.reset()
-        for turn in turns:
+        for turn in turns[-16:]:
             role = turn.get("role")
             content = str(turn.get("content") or "").strip()
             if role in {"user", "assistant"} and content:

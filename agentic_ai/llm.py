@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, Callable
 
 from openai import OpenAI
 
@@ -23,6 +24,7 @@ class LLM:
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.2,
         model: str | None = None,
+        on_delta: Callable[[str], None] | None = None,
     ) -> Any:
         used = model or self.settings.model
         kwargs: dict[str, Any] = {
@@ -33,7 +35,25 @@ class LLM:
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
+        extra: dict[str, Any] = {}
         # Qwen 3.6/3.8 default to thinking and can return empty visible answers.
         if used.startswith("qwen/"):
-            kwargs["extra_body"] = {"reasoning_effort": "none"}
+            extra["reasoning_effort"] = "none"
+        elif "gpt-oss" in used:
+            extra["reasoning_effort"] = "low"
+        if extra:
+            kwargs["extra_body"] = extra
+        if on_delta and not tools:
+            kwargs["stream"] = True
+            chunks: list[str] = []
+            for part in self.client.chat.completions.create(**kwargs):
+                if not part.choices:
+                    continue
+                piece = str(getattr(part.choices[0].delta, "content", None) or "")
+                if piece:
+                    chunks.append(piece)
+                    on_delta(piece)
+            text = "".join(chunks)
+            message = SimpleNamespace(content=text, tool_calls=None)
+            return SimpleNamespace(choices=[SimpleNamespace(message=message)])
         return self.client.chat.completions.create(**kwargs)

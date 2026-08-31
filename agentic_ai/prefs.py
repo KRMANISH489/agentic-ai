@@ -8,6 +8,12 @@ from agentic_ai.config import ROOT_DIR
 PREFS_PATH = ROOT_DIR / "settings.json"
 PLAYBOOK_PATH = ROOT_DIR / "IT_Teach_Playbook.txt"
 PLAYBOOK_ID = "it-teach-playbook"
+PLAYBOOK_BRIEF = (
+    "IT tutor style (always follow): start with a short daily-life analogy, then the plain meaning, "
+    "then working code in markdown. Vs questions get a real markdown table with a | --- | separator "
+    "plus code that uses both. If they wrote Hindi or Hinglish, explain in simple Hindi; keep code in English. "
+    "Use one language of code unless they asked for more. Do not call tools for textbook IT."
+)
 APP_VERSION = "1.7.0"
 
 CORE_TOOLS = [

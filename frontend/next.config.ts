@@ -11,7 +11,6 @@ function shouldProxyApi() {
 }
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@imgly/background-removal", "onnxruntime-web"],
   async rewrites() {
     if (!shouldProxyApi()) return [];
     return [{ source: "/api/:path*", destination: `${API_ORIGIN}/api/:path*` }];

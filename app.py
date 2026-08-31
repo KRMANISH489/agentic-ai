@@ -493,7 +493,6 @@ def _work_focus_note(focus: str) -> str:
         "If they asked to build a webpage, UI, or full file, also put the complete file in an <artifact>.\n"
         "If they did not name a language, pick one sensible stack and ship it "
         "(Python/FastAPI for APIs, HTML+JS for simple web, their language if they named it).\n"
-        "Use code_run when a short Python check would verify the answer.\n"
         "Skip long teaching analogies unless they asked to explain/samjhao. "
         "If the request is vague, state one assumption in one line and still deliver working code.\n"
     )
@@ -510,20 +509,25 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
         try:
             with _lock:
                 runner = _get_runner(req.mode, on_trace, user)
-                transcript = [{"role": t.role, "content": t.content} for t in req.history]
+                transcript = [{"role": t.role, "content": t.content} for t in req.history][-16:]
                 prompt = req.message.strip() + _reply_lang_note(req.lang) + _work_focus_note(req.focus) + _project_note(req)
                 photos = [
                     url
                     for url in req.images[:4]
                     if isinstance(url, str) and url.startswith("data:image/") and len(url) < 4_000_000
                 ]
+
+                def on_token(piece: str) -> None:
+                    if piece:
+                        events.put({"type": "delta", "content": piece})
+
                 if req.mode == "crew" and _crew is not None:
                     _crew.researcher.load_transcript(transcript)
                     _crew.writer.reset()
                     answer = _crew.run(prompt, images=photos or None)
                 elif _agent is not None:
                     _agent.load_transcript(transcript)
-                    answer = _agent.ask(prompt, images=photos or None)
+                    answer = _agent.ask(prompt, images=photos or None, on_token=on_token)
                 else:
                     answer = runner(prompt)
             events.put({"type": "answer", "content": answer})

@@ -5,7 +5,6 @@ import { marked, type Tokens } from "marked";
 import { ArtifactPane } from "@/components/ArtifactPane";
 import { Logo } from "@/components/Logo";
 import { extractArtifacts, type Artifact } from "@/lib/artifacts";
-import { applyPhotoBackground, BG_SWATCHES } from "@/lib/photoBg";
 import type { AppState, ChatItem, ChatMessage, Project, ProjectFile, ToolItem, User } from "@/lib/types";
 
 const STORE_KEY = "agentic.chats.v1";
@@ -82,19 +81,88 @@ function wrapCodeBlocks(markup: string) {
   });
 }
 
+function wrapTables(markup: string) {
+  return markup.replace(/<table[\s\S]*?<\/table>/gi, (table) =>
+    table.includes("md-table-wrap") ? table : `<div class="md-table-wrap">${table}</div>`
+  );
+}
+
+function isFenceLine(line: string) {
+  return /^\s*```/.test(line);
+}
+
+function isPipeRow(line: string) {
+  const t = line.trim();
+  if (!t || isFenceLine(t) || t.startsWith(">")) return false;
+  if (!t.includes("|")) return false;
+  return t.split("|").length >= 3 || (t.includes("|") && t.split("|").filter(Boolean).length >= 2);
+}
+
+function isTableSep(line: string) {
+  return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(line);
+}
+
+function toPipedRow(line: string) {
+  const cells = line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+  return `| ${cells.join(" | ")} |`;
+}
+
+function ensureGfmTables(text: string) {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  let inFence = false;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (isFenceLine(line)) {
+      inFence = !inFence;
+      out.push(line);
+      i += 1;
+      continue;
+    }
+    if (!inFence && isPipeRow(line) && i + 1 < lines.length && (isPipeRow(lines[i + 1]) || isTableSep(lines[i + 1]))) {
+      const block: string[] = [];
+      while (i < lines.length && (isPipeRow(lines[i]) || isTableSep(lines[i]))) {
+        block.push(lines[i]);
+        i += 1;
+      }
+      const header = toPipedRow(block[0]);
+      const cols = header.split("|").filter((part) => part.trim() !== "").length;
+      const rest = block.slice(1);
+      const hasSep = rest.some(isTableSep);
+      out.push(header);
+      if (!hasSep) out.push(`| ${Array(cols).fill("---").join(" | ")} |`);
+      for (const row of rest) out.push(isTableSep(row) ? row : toPipedRow(row));
+      continue;
+    }
+    out.push(line);
+    i += 1;
+  }
+  return out.join("\n");
+}
+
+function streamHtml(text: string) {
+  return `<div class="md stream-draft">${escapeHtml(text)}</div>`;
+}
+
 function html(text: string) {
   const renderer = new marked.Renderer();
   renderer.code = ({ text: code, lang }: Tokens.Code) => {
     const language = (lang || "").trim().split(/\s+/)[0] || "code";
     return `<div class="code-block"><div class="code-bar"><span>${escapeHtml(language)}</span><button type="button" class="copy-code">Copy</button></div><pre><code>${escapeHtml(code)}</code></pre></div>`;
   };
-  const markup = marked.parse(text, {
+  const markup = marked.parse(ensureGfmTables(text), {
     async: false,
     gfm: true,
     breaks: true,
     renderer,
   }) as string;
-  return wrapCodeBlocks(markup);
+  return wrapTables(wrapCodeBlocks(markup));
 }
 
 function codeFromReply(text: string) {
@@ -119,7 +187,7 @@ async function copyText(text: string) {
   }
 }
 
-type PendingPhoto = { id: string; name: string; dataUrl: string; originalDataUrl: string };
+type PendingPhoto = { id: string; name: string; dataUrl: string };
 type PendingFile = { id: string; name: string; text: string };
 
 function wrapFileBlock(name: string, text: string) {
@@ -360,14 +428,6 @@ export default function AppClient() {
   const [navOpen, setNavOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [landingOpen, setLandingOpen] = useState(false);
-  const [bgEditId, setBgEditId] = useState<string | null>(null);
-  const [bgColor, setBgColor] = useState("#dacebe");
-  const [bgImageUrl, setBgImageUrl] = useState("");
-  const [bgCutout, setBgCutout] = useState(true);
-  const [bgTransparent, setBgTransparent] = useState(false);
-  const [bgFit, setBgFit] = useState<"contain" | "cover">("contain");
-  const [bgBusy, setBgBusy] = useState(false);
-  const [bgPreviewUrl, setBgPreviewUrl] = useState("");
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [teachInst, setTeachInst] = useState("");
@@ -387,7 +447,6 @@ export default function AppClient() {
   const voiceFinalRef = useRef("");
   const galleryRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const bgFileRef = useRef<HTMLInputElement>(null);
   const teachFileRef = useRef<HTMLInputElement>(null);
   const projectFileRef = useRef<HTMLInputElement>(null);
   const cameraFileRef = useRef<HTMLInputElement>(null);
@@ -451,38 +510,6 @@ export default function AppClient() {
   }, [settingsOpen, appState.prefs?.teach_instructions, appState.prefs?.teach_memory]);
 
   useEffect(() => {
-    if (!bgEditId) {
-      setBgPreviewUrl("");
-      return;
-    }
-    const photo = pendingPhotos.find((p) => p.id === bgEditId);
-    if (!photo) return;
-    const source = photo.originalDataUrl || photo.dataUrl;
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void applyPhotoBackground({
-        sourceUrl: source,
-        color: bgColor,
-        bgImageUrl: bgImageUrl || undefined,
-        cutout: bgCutout,
-        transparentOnly: bgTransparent,
-        fit: bgFit,
-        fast: true,
-      })
-        .then((result) => {
-          if (!cancelled) setBgPreviewUrl(result.dataUrl);
-        })
-        .catch(() => {
-          if (!cancelled) setBgPreviewUrl(source);
-        });
-    }, 80);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [bgEditId, bgColor, bgImageUrl, bgCutout, bgTransparent, bgFit, pendingPhotos]);
-
-  useEffect(() => {
     async function boot() {
       const oauthErr = new URLSearchParams(window.location.search).get("oauth_error");
       if (oauthErr) {
@@ -522,7 +549,6 @@ export default function AppClient() {
         setHelpOpen(false);
         setAttachOpen(false);
         setLandingOpen(false);
-        setBgEditId(null);
         closeCamera();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") {
@@ -911,6 +937,14 @@ export default function AppClient() {
                   : b
               )
             );
+          } else if (event.type === "delta") {
+            setBubbles((prev) =>
+              prev.map((b) => {
+                if (b.id !== agentId) return b;
+                const next = `${b.text || ""}${event.content}`;
+                return { ...b, thinking: false, trace: "", text: next, html: streamHtml(next) };
+              })
+            );
           } else if (event.type === "answer") {
             setBubbles((prev) =>
               prev.map((b) =>
@@ -1009,7 +1043,6 @@ export default function AppClient() {
           id: crypto.randomUUID(),
           name: file.name || "photo.jpg",
           dataUrl,
-          originalDataUrl: dataUrl,
         });
       }
       setPendingPhotos((prev) => [...prev, ...next].slice(0, 4));
@@ -1082,84 +1115,10 @@ export default function AppClient() {
     closeCamera();
     setPendingPhotos((prev) => {
       if (prev.length >= 4) return prev;
-      return [...prev, { id: crypto.randomUUID(), name: "camera.jpg", dataUrl, originalDataUrl: dataUrl }];
+      return [...prev, { id: crypto.randomUUID(), name: "camera.jpg", dataUrl }];
     });
   }
 
-  function openBgEditor(photo: PendingPhoto) {
-    setBgEditId(photo.id);
-    setBgColor("#dacebe");
-    setBgImageUrl("");
-    setBgCutout(true);
-    setBgTransparent(false);
-    setBgFit("contain");
-  }
-
-  function closeBgEditor() {
-    if (bgImageUrl.startsWith("blob:")) URL.revokeObjectURL(bgImageUrl);
-    setBgImageUrl("");
-    setBgEditId(null);
-    setBgBusy(false);
-    setBgPreviewUrl("");
-  }
-
-  async function downloadBgEdit() {
-    const photo = pendingPhotos.find((p) => p.id === bgEditId);
-    if (!photo) return;
-    setBgBusy(true);
-    setVoiceHint(bgCutout ? "Making the photo transparent… first time can take a minute." : "");
-    try {
-      const result = await applyPhotoBackground({
-        sourceUrl: photo.originalDataUrl || photo.dataUrl,
-        color: bgColor,
-        bgImageUrl: bgImageUrl || undefined,
-        cutout: bgCutout,
-        transparentOnly: bgTransparent,
-        fit: bgFit,
-      });
-      setPendingPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, dataUrl: result.dataUrl } : p)));
-      const a = document.createElement("a");
-      a.href = result.dataUrl;
-      a.download = `${photo.name.replace(/\.[^.]+$/, "") || "photo"}-bg.${result.ext}`;
-      a.click();
-      setVoiceHint("");
-    } catch (err) {
-      setVoiceHint(err instanceof Error ? err.message : "Could not download that photo.");
-    } finally {
-      setBgBusy(false);
-    }
-  }
-
-  async function applyBgEdit() {
-    const photo = pendingPhotos.find((p) => p.id === bgEditId);
-    if (!photo) return;
-    setBgBusy(true);
-    setVoiceHint(bgCutout ? "Making the photo transparent… first time can take a minute." : "");
-    try {
-      const result = await applyPhotoBackground({
-        sourceUrl: photo.originalDataUrl || photo.dataUrl,
-        color: bgColor,
-        bgImageUrl: bgImageUrl || undefined,
-        cutout: bgCutout,
-        transparentOnly: bgTransparent,
-        fit: bgFit,
-      });
-      setPendingPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, dataUrl: result.dataUrl } : p)));
-      setVoiceHint("");
-      closeBgEditor();
-    } catch (err) {
-      setVoiceHint(err instanceof Error ? err.message : "Could not change the background.");
-      setBgBusy(false);
-    }
-  }
-
-  function resetBgEdit() {
-    const photo = pendingPhotos.find((p) => p.id === bgEditId);
-    if (!photo) return;
-    setPendingPhotos((prev) =>
-      prev.map((p) => (p.id === photo.id ? { ...p, dataUrl: p.originalDataUrl || p.dataUrl } : p))
-    );
-    closeBgEditor();
   }
 
   function speechLang() {
@@ -2047,16 +2006,9 @@ export default function AppClient() {
               <div className="attach-previews">
                 {pendingPhotos.map((photo) => (
                   <div className="attach-preview" key={photo.id}>
-                    <button type="button" className="attach-thumb" onClick={() => openBgEditor(photo)} title="Change background">
+                    <div className="attach-thumb">
                       <img src={photo.dataUrl} alt="" />
-                    </button>
-                    <button
-                      type="button"
-                      className="attach-bg"
-                      onClick={() => openBgEditor(photo)}
-                    >
-                      BG
-                    </button>
+                    </div>
                     <button
                       type="button"
                       className="attach-remove"
@@ -2133,19 +2085,6 @@ export default function AppClient() {
                   </button>
                 </div>
               </div>
-              <input
-                ref={bgFileRef}
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  if (bgImageUrl.startsWith("blob:")) URL.revokeObjectURL(bgImageUrl);
-                  setBgImageUrl(URL.createObjectURL(file));
-                }}
-              />
               <input
                 ref={galleryRef}
                 type="file"
@@ -2510,7 +2449,6 @@ export default function AppClient() {
             <p>Ask it to save a markdown note, then open Notes from the profile menu. Ask it to run Python and it uses the code sandbox.</p>
             <p>Ask it to make a webpage or graphic — the result opens in Artifacts on the right. Tap Download to save the HTML file.</p>
             <p>Or tap + → Landing page and pick a type (shop, restaurant, portfolio…). It builds that exact page.</p>
-            <p>Attach a photo, tap BG, then change the background color or set another image behind it.</p>
             <p>Use Settings to install tools like Dice or Unit Convert.</p>
             <p>Use Chat for questions and teaching. Switch to Code when you want a full working fix, not a short explanation.</p>
             <p>Single agent is best for quick questions. Researcher + Writer is better for long research.</p>
@@ -2587,106 +2525,6 @@ export default function AppClient() {
               </button>
             ))}
           </div>
-        </div>
-      </div>
-      <div className={`overlay ${bgEditId ? "open" : ""}`} onClick={(e) => e.target === e.currentTarget && closeBgEditor()}>
-        <div className="settings bg-modal">
-          <div className="settings-head">
-            <h2>Photo background</h2>
-            <button className="close-x" type="button" onClick={closeBgEditor}>
-              ×
-            </button>
-          </div>
-          {(() => {
-            const photo = pendingPhotos.find((p) => p.id === bgEditId);
-            if (!photo) return null;
-            return (
-              <>
-                <div className={`bg-preview ${bgTransparent ? "checkered" : ""}`} style={bgTransparent ? undefined : { background: bgColor }}>
-                  {bgPreviewUrl ? (
-                    <img className="bg-preview-result" src={bgPreviewUrl} alt="" />
-                  ) : (
-                    <>
-                      {bgImageUrl ? <img className="bg-preview-back" src={bgImageUrl} alt="" /> : null}
-                      <img src={photo.originalDataUrl || photo.dataUrl} alt="" />
-                    </>
-                  )}
-                </div>
-                <p className="landing-lead">
-                  Turn the photo transparent so the new color or background image shows through cleanly. First time can take a minute.
-                </p>
-                <div className="bg-swatches">
-                  {BG_SWATCHES.map((hex) => (
-                    <button
-                      key={hex}
-                      type="button"
-                      className={`bg-swatch ${bgColor === hex ? "on" : ""}`}
-                      style={{ background: hex }}
-                      aria-label={hex}
-                      onClick={() => setBgColor(hex)}
-                    />
-                  ))}
-                  <label className="bg-swatch custom">
-                    <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
-                  </label>
-                </div>
-                <div className="bg-checks">
-                  <label className="bg-check">
-                    <input type="checkbox" checked={bgCutout} onChange={(e) => setBgCutout(e.target.checked)} />
-                    Make image transparent
-                  </label>
-                  <label className="bg-check">
-                    <input
-                      type="checkbox"
-                      checked={bgTransparent}
-                      onChange={(e) => {
-                        setBgTransparent(e.target.checked);
-                        if (e.target.checked) setBgCutout(true);
-                      }}
-                    />
-                    Save as transparent PNG
-                  </label>
-                </div>
-                <div className="bg-row">
-                  <span className="bg-fit-label">Background fit</span>
-                  <div className="artifact-toggle">
-                    <button type="button" className={bgFit === "contain" ? "on" : ""} onClick={() => setBgFit("contain")}>
-                      Fit
-                    </button>
-                    <button type="button" className={bgFit === "cover" ? "on" : ""} onClick={() => setBgFit("cover")}>
-                      Fill
-                    </button>
-                  </div>
-                </div>
-                <div className="bg-actions">
-                  <button type="button" className="remove" onClick={() => bgFileRef.current?.click()}>
-                    {bgImageUrl ? "Change BG image" : "Set BG image"}
-                  </button>
-                  {bgImageUrl ? (
-                    <button
-                      type="button"
-                      className="remove"
-                      onClick={() => {
-                        if (bgImageUrl.startsWith("blob:")) URL.revokeObjectURL(bgImageUrl);
-                        setBgImageUrl("");
-                      }}
-                    >
-                      Clear image
-                    </button>
-                  ) : null}
-                  <button type="button" className="remove" onClick={resetBgEdit}>
-                    Reset
-                  </button>
-                  <button type="button" className="remove" disabled={bgBusy} onClick={() => void downloadBgEdit()}>
-                    Download
-                  </button>
-                  <button type="button" className="install" disabled={bgBusy} onClick={() => void applyBgEdit()}>
-                    {bgBusy ? (bgCutout ? "Making transparent…" : "Applying…") : "Apply"}
-                  </button>
-                </div>
-              </>
-            );
-          })()}
         </div>
       </div>
     </div>

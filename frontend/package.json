@@ -9,10 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@imgly/background-removal": "^1.7.0",
     "marked": "^18.0.10",
     "next": "15.5.9",
-    "onnxruntime-web": "^1.21.0",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
