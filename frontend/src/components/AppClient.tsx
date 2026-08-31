@@ -1119,8 +1119,6 @@ export default function AppClient() {
     });
   }
 
-  }
-
   function speechLang() {
     if (lang === "hi" || lang === "bho") return "hi-IN";
     return "en-IN";
