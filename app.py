@@ -93,6 +93,7 @@ class ChatRequest(BaseModel):
     history: list[HistoryTurn] = []
     images: list[str] = []
     lang: str = "en"
+    focus: str = "chat"
     project_name: str = ""
     project_instructions: str = ""
     project_files: list[ProjectFileIn] = []
@@ -477,6 +478,24 @@ def _reply_lang_note(lang: str) -> str:
     return ""
 
 
+def _work_focus_note(focus: str) -> str:
+    if (focus or "").strip().lower() != "code":
+        return ""
+    return (
+        "\n\nCODE MODE is on. This is a coding session, not a lecture.\n"
+        "Solve the actual problem with complete, runnable code — no stubs, no '...' holes.\n"
+        "Lead with the working solution in markdown fences (correct language tag). "
+        "Then a short why, how to run it, and one likely pitfall.\n"
+        "If they pasted an error: name the cause in one line, then the fixed code.\n"
+        "If they asked to build a webpage, UI, or full file, also put the complete file in an <artifact>.\n"
+        "If they did not name a language, pick one sensible stack and ship it "
+        "(Python/FastAPI for APIs, HTML+JS for simple web, their language if they named it).\n"
+        "Use code_run when a short Python check would verify the answer.\n"
+        "Skip long teaching analogies unless they asked to explain/samjhao. "
+        "If the request is vague, state one assumption in one line and still deliver working code.\n"
+    )
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingResponse:
     events: queue.Queue[dict | None] = queue.Queue()
@@ -489,7 +508,7 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
             with _lock:
                 runner = _get_runner(req.mode, on_trace, user)
                 transcript = [{"role": t.role, "content": t.content} for t in req.history]
-                prompt = req.message.strip() + _reply_lang_note(req.lang) + _project_note(req)
+                prompt = req.message.strip() + _reply_lang_note(req.lang) + _work_focus_note(req.focus) + _project_note(req)
                 photos = [
                     url
                     for url in req.images[:4]

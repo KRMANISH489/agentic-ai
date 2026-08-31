@@ -10,6 +10,7 @@ import type { AppState, ChatItem, ChatMessage, Project, ProjectFile, ToolItem, U
 
 const STORE_KEY = "agentic.chats.v1";
 const PROJECTS_KEY = "agentic.projects.v1";
+const FOCUS_KEY = "agentic.focus.v1";
 const MODE_LABELS: Record<string, string> = {
   agent: "Single agent",
   crew: "Researcher + Writer",
@@ -335,6 +336,7 @@ export default function AppClient() {
   const [currentProjectId, setCurrentProjectId] = useState<string>("");
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [mode, setMode] = useState("agent");
+  const [workFocus, setWorkFocus] = useState<"chat" | "code">("chat");
   const [modeOpen, setModeOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
@@ -420,6 +422,8 @@ export default function AppClient() {
     } catch {
       setProjects([]);
     }
+    const savedFocus = localStorage.getItem(FOCUS_KEY);
+    if (savedFocus === "code" || savedFocus === "chat") setWorkFocus(savedFocus);
   }, []);
 
   useEffect(() => {
@@ -871,6 +875,7 @@ export default function AppClient() {
           history,
           images,
           lang,
+          focus: workFocus,
           project_name: project?.name || "",
           project_instructions: project?.instructions || "",
           project_files: (project?.files || []).map((file) => ({ title: file.title, text: file.text })),
@@ -1855,7 +1860,11 @@ export default function AppClient() {
                 <div className="empty">
                   <Logo large twinkle />
                   <h2>Ready to leap{user?.name ? `, ${user.name.trim().split(/\s+/)[0]}` : ""}?</h2>
-                  <p>Jump in with a question, a file, or a project.</p>
+                  <p>
+                    {workFocus === "code"
+                      ? "Describe the bug or what to build. You’ll get working code."
+                      : "Jump in with a question, a file, or a project."}
+                  </p>
                   <div className="start-chips">
                     <button type="button" disabled={sending} onClick={openLandingPicker}>
                       Make a landing page
@@ -2002,6 +2011,38 @@ export default function AppClient() {
             </div>
           </div>
           <div className="composer-wrap">
+            <div className="focus-toggle" role="tablist" aria-label="Chat or Code">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={workFocus === "chat"}
+                className={workFocus === "chat" ? "on" : ""}
+                onClick={() => {
+                  setWorkFocus("chat");
+                  localStorage.setItem(FOCUS_KEY, "chat");
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Chat
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={workFocus === "code"}
+                className={workFocus === "code" ? "on" : ""}
+                onClick={() => {
+                  setWorkFocus("code");
+                  localStorage.setItem(FOCUS_KEY, "code");
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" />
+                </svg>
+                Code
+              </button>
+            </div>
             {(pendingPhotos.length || pendingFiles.length) ? (
               <div className="attach-previews">
                 {pendingPhotos.map((photo) => (
@@ -2140,7 +2181,15 @@ export default function AppClient() {
               />
               <textarea
                 ref={inputRef}
-                placeholder={listening ? "Listening…" : pendingPhotos.length || pendingFiles.length ? "Add a caption…" : "What’s the mission?"}
+                placeholder={
+                  listening
+                    ? "Listening…"
+                    : pendingPhotos.length || pendingFiles.length
+                      ? "Add a caption…"
+                      : workFocus === "code"
+                        ? "Paste the error or say what to build…"
+                        : "What’s the mission?"
+                }
                 rows={1}
                 value={input}
                 onChange={(e) => {
@@ -2459,6 +2508,7 @@ export default function AppClient() {
             <p>Or tap + → Landing page and pick a type (shop, restaurant, portfolio…). It builds that exact page.</p>
             <p>Attach a photo, tap BG, then change the background color or set another image behind it.</p>
             <p>Use Settings to install tools like Dice or Unit Convert.</p>
+            <p>Use Chat for questions and teaching. Switch to Code when you want a full working fix, not a short explanation.</p>
             <p>Single agent is best for quick questions. Researcher + Writer is better for long research.</p>
           </div>
         </div>
