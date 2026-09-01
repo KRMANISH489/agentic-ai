@@ -5,6 +5,7 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 COPY frontend ./
 ENV API_ORIGIN=http://127.0.0.1:7860
+ENV NEXT_PUBLIC_SITE_URL=https://agentic-ai-d0cx.onrender.com
 ENV NEXT_TELEMETRY_DISABLED=1
 # Webpack build: package.json "build" uses turbopack, which is for local dev.
 RUN npx next build

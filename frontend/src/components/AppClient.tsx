@@ -517,14 +517,20 @@ export default function AppClient() {
         setOauthError(oauthErr);
         window.history.replaceState({}, "", "/");
       }
-      const res = await fetch("/api/me", { credentials: "include" });
-      const data = await res.json();
-      setOauthReady(data.oauth || { google: false, github: false });
-      if (data.user) {
-        setUser(data.user);
-        await loadStatus();
+      try {
+        const res = await fetch("/api/me", { credentials: "include" });
+        if (!res.ok) throw new Error("status");
+        const data = await res.json();
+        setOauthReady(data.oauth || { google: false, github: false });
+        if (data.user) {
+          setUser(data.user);
+          await loadStatus();
+        }
+      } catch {
+        setLoginError("API is not running. Start the FastAPI server, then refresh.");
+      } finally {
+        setReady(true);
       }
-      setReady(true);
     }
     void boot();
   }, []);
@@ -1432,8 +1438,6 @@ export default function AppClient() {
       alert(data.error || "Could not save the key.");
     }
   }
-
-  if (!ready) return <div className="app locked" />;
 
   const prefs = appState.prefs || {};
   const tools = appState.tools || [];
