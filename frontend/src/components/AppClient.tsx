@@ -34,12 +34,20 @@ const LANDING_TYPES = [
 
 function landingPrompt(kind: (typeof LANDING_TYPES)[number], lang: string) {
   const speak =
-    lang === "hi" ? "Write visible page copy in Hindi." : lang === "bho" ? "Write visible page copy in Bhojpuri." : "Write visible page copy in English.";
+    lang === "hi"
+      ? "Write all visible page copy in Hindi."
+      : lang === "bho"
+        ? "Write all visible page copy in Bhojpuri."
+        : "Write all visible page copy in English.";
   return [
-    `Create a complete landing page of this exact type: ${kind.title}.`,
-    `Sections to include: ${kind.sections}.`,
-    "One self-contained HTML file with CSS inside a <style> tag. No external CSS/JS frameworks or stock Unsplash URLs that 404 — use CSS gradients, shapes, and placeholder blocks instead of broken images.",
-    "Mobile-first and desktop layouts. Distinct look for this type — do not reuse a generic “Awesome Product” SaaS template.",
+    `Create a PREMIUM ROYAL quality complete website landing page for: ${kind.title}.`,
+    `Required sections (adapt to this niche): ${kind.sections}.`,
+    "Also include: sticky premium header (logo, nav, CTA, working mobile menu), trust/logos strip, stats band, testimonials, FAQ or pricing, final CTA, and a rich multi-column footer.",
+    "Minimum 8–10 distinct sections total. Self-contained HTML with <style> and <script> in one file. You may load Google Fonts via <link>.",
+    "Design bar: luxury / premium / royal — deep elegant palette, expressive display + clean body fonts, layered gradients, soft glows, glass panels, generous spacing, polished buttons. Not a flat simple template.",
+    "Motion: at least 4 CSS/JS animations (hero entrance, scroll reveal, card hover, smooth anchor scroll / header effect).",
+    "Images: Pollinations URLs https://image.pollinations.ai/prompt/SCENE?width=1400&height=900&nologo=true&enhance=true — hero plus 4–6 unique section images. No empty src.",
+    "Mobile-first responsive. Distinct look for this type — never a generic Awesome Product SaaS page.",
     speak,
     'Put the full file in an artifact: <artifact type="html" title="' + kind.title + ' landing"> ... </artifact>',
   ].join(" ");

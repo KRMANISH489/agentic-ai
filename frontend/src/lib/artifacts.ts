@@ -1,3 +1,5 @@
+import { ensurePageImages } from "@/lib/pageImages";
+
 export type ArtifactKind = "html" | "svg" | "markdown" | "code";
 
 export type Artifact = {
@@ -49,9 +51,10 @@ export function extractArtifacts(text: string): { artifacts: Artifact[]; display
   rest = rest.replace(/<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/gi, (_all, raw: string, inner: string) => {
     const type = attr(raw, "type");
     const language = attr(raw, "language");
-    const content = inner.replace(/^\n+|\n+$/g, "");
+    let content = inner.replace(/^\n+|\n+$/g, "");
     const kind = kindOf(type, language, content);
     const title = attr(raw, "title") || titleFromContent(content, kind === "html" ? "Page" : "Artifact");
+    if (kind === "html") content = ensurePageImages(content, title);
     artifacts.push({
       id: `${slug(title)}-${artifacts.length}`,
       title,
@@ -63,13 +66,14 @@ export function extractArtifacts(text: string): { artifacts: Artifact[]; display
   });
 
   rest = rest.replace(/```([^\n]*)\n([\s\S]*?)```/g, (all, meta: string, inner: string) => {
-    const content = String(inner).replace(/\s+$/, "");
+    const rawContent = String(inner).replace(/\s+$/, "");
     const parts = String(meta || "").trim().split(/\s+/);
     const head = (parts[0] || "").toLowerCase();
     if (head === "artifact") {
       const language = (parts[1] || "html").toLowerCase();
-      const title = parts.slice(2).join(" ") || titleFromContent(content, "Artifact");
-      const kind = kindOf(language, language, content);
+      const title = parts.slice(2).join(" ") || titleFromContent(rawContent, "Artifact");
+      const kind = kindOf(language, language, rawContent);
+      const content = kind === "html" ? ensurePageImages(rawContent, title) : rawContent;
       artifacts.push({
         id: `${slug(title)}-${artifacts.length}`,
         title,
@@ -79,9 +83,10 @@ export function extractArtifacts(text: string): { artifacts: Artifact[]; display
       });
       return "";
     }
-    if (isPreviewableFence(head, content)) {
-      const kind = kindOf(head, head, content);
-      const title = titleFromContent(content, kind === "svg" ? "Graphic" : "Page");
+    if (isPreviewableFence(head, rawContent)) {
+      const kind = kindOf(head, head, rawContent);
+      const title = titleFromContent(rawContent, kind === "svg" ? "Graphic" : "Page");
+      const content = kind === "html" ? ensurePageImages(rawContent, title) : rawContent;
       artifacts.push({
         id: `${slug(title)}-${artifacts.length}`,
         title,

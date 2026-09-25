@@ -1,4 +1,5 @@
 import { htmlDocument, svgDocument, type Artifact } from "@/lib/artifacts";
+import { ensurePageImages } from "@/lib/pageImages";
 
 function slug(title: string) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "artifact";
@@ -32,7 +33,7 @@ export function artifactFileName(artifact: Artifact, used = new Set<string>()) {
 }
 
 export function artifactFileBody(artifact: Artifact) {
-  if (artifact.type === "html") return htmlDocument(artifact.content);
+  if (artifact.type === "html") return htmlDocument(ensurePageImages(artifact.content, artifact.title));
   if (artifact.type === "svg") {
     return artifact.content.trim().startsWith("<svg") ? artifact.content : svgDocument(artifact.content);
   }

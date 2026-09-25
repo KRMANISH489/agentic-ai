@@ -4,6 +4,7 @@ import { marked } from "marked";
 import { useEffect, useMemo, useState } from "react";
 import { artifactFileBody, artifactFileName, artifactMime } from "@/lib/artifactFiles";
 import { htmlDocument, svgDocument, type Artifact } from "@/lib/artifacts";
+import { ensurePageImages } from "@/lib/pageImages";
 import { buildZip, downloadBlob } from "@/lib/zip";
 
 function escapeHtml(value: string) {
@@ -35,7 +36,7 @@ export function ArtifactPane({
 
   const previewDoc = useMemo(() => {
     if (!active) return "";
-    if (active.type === "html") return htmlDocument(active.content);
+    if (active.type === "html") return htmlDocument(ensurePageImages(active.content, active.title));
     if (active.type === "svg") return svgDocument(active.content);
     if (active.type === "markdown") {
       const markup = marked.parse(active.content, { async: false, gfm: true, breaks: true }) as string;

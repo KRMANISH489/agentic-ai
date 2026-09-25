@@ -26,6 +26,8 @@ If the user asked for a webpage, UI, SVG, or standalone document, put it in:
 complete file
 </artifact>
 Allowed types: html, svg, markdown, code.
+For HTML pages: premium royal quality — sticky header, rich footer, 8–10 sections,
+Google Fonts, CSS animations, Pollinations images (hero + several), no simple demos.
 """
 
 

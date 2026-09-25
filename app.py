@@ -44,6 +44,7 @@ from agentic_ai.canva import (
 from agentic_ai.config import load_settings, save_groq_key
 from agentic_ai.crew import Crew
 from agentic_ai.files import FileExtractError, extract_bytes
+from agentic_ai.page_design import PREMIUM_PAGE_DESIGN
 from agentic_ai.prefs import APP_VERSION, load_prefs, save_prefs
 from agentic_ai.tools import TOOL_CATALOG, delete_note, list_notes, read_note
 
@@ -492,6 +493,8 @@ def _work_focus_note(focus: str) -> str:
         "Then a short why, how to run it, and one likely pitfall.\n"
         "If they pasted an error: name the cause in one line, then the fixed code.\n"
         "If they asked to build a webpage, UI, or full file, also put the complete file in an <artifact>.\n"
+        "For websites/landing pages: premium royal quality — sticky header, rich footer, "
+        "8–10 sections, CSS animations, Google Fonts, Pollinations images, no simple 3-box demos.\n"
         "If they did not name a language, pick one sensible stack and ship it "
         "(Python/FastAPI for APIs, HTML+JS for simple web, their language if they named it).\n"
         "Skip long teaching analogies unless they asked to explain/samjhao. "
@@ -518,16 +521,7 @@ def _page_build_note(message: str) -> str:
     text = (message or "").strip()
     if not text or not _PAGE_BUILD_RE.search(text):
         return ""
-    return (
-        "\n\nPAGE BUILD REQUEST detected. This is not a teaching question.\n"
-        "You MUST deliver a complete, self-contained HTML page inside an <artifact type=\"html\" title=\"...\"> "
-        "block — full CSS in <style>, working layout, real sections, no stubs and no markdown-only reply.\n"
-        "Write a 1–2 line intro in the user's language, then the artifact. Do not wrap artifact tags in fences.\n"
-        "If they pasted a URL for inspiration, match that style/structure as closely as you can from the description "
-        "and common patterns for that kind of site. You cannot push to their live Vercel/hosting — "
-        "the deliverable is the HTML artifact they can preview and download here.\n"
-        "If they said same-to-same / jaisa design, make a polished recreation of that vibe, not a generic template.\n"
-    )
+    return "\n\n" + PREMIUM_PAGE_DESIGN + "\n"
 
 
 @app.post("/api/chat")
