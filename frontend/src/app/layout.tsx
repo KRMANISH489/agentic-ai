@@ -29,7 +29,9 @@ export const viewport: Viewport = {
   themeColor: "#db8f2a",
 };
 
-const googleVerify = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
+const googleVerify =
+  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim() ||
+  "4vbDh9J6l5-_egLorVQPWTQ6OzEDuXGO7r9JrAtwfDQ";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -81,7 +83,7 @@ export const metadata: Metadata = {
     apple: "/favicon.png?v=5",
   },
   manifest: "/manifest.webmanifest",
-  ...(googleVerify ? { verification: { google: googleVerify } } : {}),
+  verification: { google: googleVerify },
 };
 
 export default function RootLayout({
