@@ -4,8 +4,10 @@ import { FormEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, use
 import { marked, type Tokens } from "marked";
 import { ArtifactPane } from "@/components/ArtifactPane";
 import { Logo } from "@/components/Logo";
+import { artifactFileBody, artifactFileName } from "@/lib/artifactFiles";
 import { extractArtifacts, type Artifact } from "@/lib/artifacts";
 import type { AppState, ChatItem, ChatMessage, Project, ProjectFile, ToolItem, User } from "@/lib/types";
+import { buildZip, downloadBlob } from "@/lib/zip";
 
 const STORE_KEY = "agentic.chats.v1";
 const PROJECTS_KEY = "agentic.projects.v1";
@@ -252,6 +254,20 @@ type Bubble = {
   error?: boolean;
   thinking?: boolean;
 };
+
+function downloadArtifactsZip(items: Artifact[]) {
+  if (!items.length) return;
+  const used = new Set<string>();
+  const entries = items.map((item) => ({
+    name: artifactFileName(item, used),
+    content: artifactFileBody(item),
+  }));
+  const zipName =
+    items.length > 1
+      ? "artifacts.zip"
+      : `${artifactFileName(items[0]).replace(/\.[^.]+$/, "") || "artifact"}.zip`;
+  downloadBlob(buildZip(entries), zipName);
+}
 
 function agentFromText(id: string, text: string, extra: Partial<Bubble> = {}): Bubble {
   const parsed = extractArtifacts(text);
@@ -611,7 +627,14 @@ export default function AppClient() {
       setLoginError(typeof data.detail === "string" ? data.detail : "Enter your name and a valid email.");
       return;
     }
-    setUser(data.user);
+    // Confirm the session cookie stuck before unlocking chat (avoids fake "logged in" UI).
+    const meRes = await fetch("/api/me", { credentials: "include" });
+    const me = await meRes.json().catch(() => ({}));
+    if (!meRes.ok || !me.user) {
+      setLoginError("Login did not stick. Allow cookies for this site, then try again.");
+      return;
+    }
+    setUser(me.user);
     await loadStatus();
   }
 
@@ -915,7 +938,13 @@ export default function AppClient() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(typeof data.detail === "string" ? data.detail : `Chat failed (${res.status})`);
+        const detail = typeof data.detail === "string" ? data.detail : `Chat failed (${res.status})`;
+        if (res.status === 401) {
+          setUser(null);
+          setLoginError("Session expired. Please sign in again to continue.");
+          throw new Error("Login required — please sign in again.");
+        }
+        throw new Error(detail);
       }
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No response stream");
@@ -1920,9 +1949,16 @@ export default function AppClient() {
                                   setArtifactOpen(true);
                                 }}
                               >
-                                {item.title}
+                                Preview · {item.title}
                               </button>
                             ))}
+                            <button
+                              type="button"
+                              className="artifact-chip zip"
+                              onClick={() => downloadArtifactsZip(b.artifacts || [])}
+                            >
+                              Download ZIP
+                            </button>
                           </div>
                         ) : null}
                         {!b.thinking && !b.error && b.text ? (

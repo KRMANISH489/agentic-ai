@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import threading
 import uuid
 import webbrowser
@@ -498,6 +499,37 @@ def _work_focus_note(focus: str) -> str:
     )
 
 
+_PAGE_BUILD_RE = re.compile(
+    r"""(?ix)
+    (
+      \b(landing\s*page|web\s*page|webpage|website|portfolio|home\s*page)\b
+      | \b(html|ui)\s+(page|mockup|design)\b
+      | \b(build|create|make|generate|design|develop|code)\b.{0,40}\b(page|site|website|landing|portfolio|ui)\b
+      | \b(page|site|website|landing|portfolio)\b.{0,40}\b(build|create|make|generate|design|develop|banao|banaye|bana\s*do|bana\s*kar)\b
+      | \b(page|site|website|landing)\s*(banao|banaye|bana\s*do|develop|develop\s*kro|develop\s*karo)
+      | \b(same\s+to\s+same|jaise|jaisa|aisi|aisa).{0,40}\b(page|site|design|website|landing)
+      | \b(page|site|website|landing|design)\s*(develop|banao|banaye|bana\s*do)
+    )
+    """
+)
+
+
+def _page_build_note(message: str) -> str:
+    text = (message or "").strip()
+    if not text or not _PAGE_BUILD_RE.search(text):
+        return ""
+    return (
+        "\n\nPAGE BUILD REQUEST detected. This is not a teaching question.\n"
+        "You MUST deliver a complete, self-contained HTML page inside an <artifact type=\"html\" title=\"...\"> "
+        "block — full CSS in <style>, working layout, real sections, no stubs and no markdown-only reply.\n"
+        "Write a 1–2 line intro in the user's language, then the artifact. Do not wrap artifact tags in fences.\n"
+        "If they pasted a URL for inspiration, match that style/structure as closely as you can from the description "
+        "and common patterns for that kind of site. You cannot push to their live Vercel/hosting — "
+        "the deliverable is the HTML artifact they can preview and download here.\n"
+        "If they said same-to-same / jaisa design, make a polished recreation of that vibe, not a generic template.\n"
+    )
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingResponse:
     events: queue.Queue[dict | None] = queue.Queue()
@@ -510,7 +542,13 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
             with _lock:
                 runner = _get_runner(req.mode, on_trace, user)
                 transcript = [{"role": t.role, "content": t.content} for t in req.history][-16:]
-                prompt = req.message.strip() + _reply_lang_note(req.lang) + _work_focus_note(req.focus) + _project_note(req)
+                prompt = (
+                    req.message.strip()
+                    + _reply_lang_note(req.lang)
+                    + _work_focus_note(req.focus)
+                    + _page_build_note(req.message)
+                    + _project_note(req)
+                )
                 photos = [
                     url
                     for url in req.images[:4]

@@ -1,8 +1,10 @@
 "use client";
 
 import { marked } from "marked";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { artifactFileBody, artifactFileName, artifactMime } from "@/lib/artifactFiles";
 import { htmlDocument, svgDocument, type Artifact } from "@/lib/artifacts";
+import { buildZip, downloadBlob } from "@/lib/zip";
 
 function escapeHtml(value: string) {
   return value
@@ -23,9 +25,13 @@ export function ArtifactPane({
   onClose: () => void;
 }) {
   const active = artifacts.find((a) => a.id === activeId) || artifacts[artifacts.length - 1];
-  const canPreview = active.type === "html" || active.type === "svg" || active.type === "markdown";
+  const canPreview = !!active && (active.type === "html" || active.type === "svg" || active.type === "markdown");
   const [mode, setMode] = useState<"preview" | "code">("preview");
   const view = canPreview ? mode : "code";
+
+  useEffect(() => {
+    if (canPreview) setMode("preview");
+  }, [active?.id, canPreview]);
 
   const previewDoc = useMemo(() => {
     if (!active) return "";
@@ -33,7 +39,9 @@ export function ArtifactPane({
     if (active.type === "svg") return svgDocument(active.content);
     if (active.type === "markdown") {
       const markup = marked.parse(active.content, { async: false, gfm: true, breaks: true }) as string;
-      return htmlDocument(`<article class="md-preview" style="max-width:720px;margin:32px auto;padding:0 24px;line-height:1.65">${markup}</article>`);
+      return htmlDocument(
+        `<article class="md-preview" style="max-width:720px;margin:32px auto;padding:0 24px;line-height:1.65">${markup}</article>`
+      );
     }
     return "";
   }, [active]);
@@ -49,7 +57,9 @@ export function ArtifactPane({
   }
 
   function openTab() {
-    const doc = canPreview ? previewDoc : htmlDocument(`<pre style="padding:24px;white-space:pre-wrap">${escapeHtml(active.content)}</pre>`);
+    const doc = canPreview
+      ? previewDoc
+      : htmlDocument(`<pre style="padding:24px;white-space:pre-wrap">${escapeHtml(active.content)}</pre>`);
     const blob = new Blob([doc], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank", "noopener");
@@ -57,32 +67,24 @@ export function ArtifactPane({
   }
 
   function downloadFile() {
-    const slug = active.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "artifact";
-    let name = `${slug}.txt`;
-    let body = active.content;
-    let mime = "text/plain;charset=utf-8";
-    if (active.type === "html") {
-      name = `${slug}.html`;
-      body = htmlDocument(active.content);
-      mime = "text/html;charset=utf-8";
-    } else if (active.type === "svg") {
-      name = `${slug}.svg`;
-      body = active.content.trim().startsWith("<svg") ? active.content : svgDocument(active.content);
-      mime = "image/svg+xml;charset=utf-8";
-    } else if (active.type === "markdown") {
-      name = `${slug}.md`;
-      mime = "text/markdown;charset=utf-8";
-    } else {
-      const lang = (active.language || "txt").replace(/[^a-z0-9]/gi, "") || "txt";
-      name = `${slug}.${lang === "javascript" ? "js" : lang === "typescript" ? "ts" : lang === "python" ? "py" : lang}`;
-    }
-    const blob = new Blob([body], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    const name = artifactFileName(active);
+    const body = artifactFileBody(active);
+    const blob = new Blob([body], { type: artifactMime(active) });
+    downloadBlob(blob, name);
+  }
+
+  function downloadZip() {
+    const used = new Set<string>();
+    const list = artifacts.length > 1 ? artifacts : [active];
+    const entries = list.map((item) => ({
+      name: artifactFileName(item, used),
+      content: artifactFileBody(item),
+    }));
+    const zipName =
+      list.length > 1
+        ? "artifacts.zip"
+        : `${artifactFileName(active).replace(/\.[^.]+$/, "") || "artifact"}.zip`;
+    downloadBlob(buildZip(entries), zipName);
   }
 
   return (
@@ -103,13 +105,21 @@ export function ArtifactPane({
               </button>
             </div>
           ) : null}
-          <button type="button" className="artifact-icon" onClick={() => void copyContent()} title="Copy">
+          <button type="button" className="artifact-icon" onClick={() => void copyContent()} title="Copy code">
             Copy
           </button>
-          <button type="button" className="artifact-icon download" onClick={downloadFile} title="Download file">
-            Download
+          <button type="button" className="artifact-icon" onClick={downloadFile} title="Download this file">
+            File
           </button>
-          <button type="button" className="artifact-icon" onClick={openTab} title="Open in new tab">
+          <button
+            type="button"
+            className="artifact-icon download"
+            onClick={downloadZip}
+            title={artifacts.length > 1 ? "Download all artifacts as ZIP" : "Download as ZIP"}
+          >
+            ZIP
+          </button>
+          <button type="button" className="artifact-icon" onClick={openTab} title="Open preview in new tab">
             Open
           </button>
           <button type="button" className="artifact-icon close" onClick={onClose} aria-label="Close artifacts">

@@ -1609,6 +1609,12 @@
       cursor: pointer;
     }
     .artifact-chip:hover { background: var(--hover); }
+    .artifact-chip.zip {
+      background: var(--orange);
+      border-color: var(--orange);
+      color: var(--on-accent);
+    }
+    .artifact-chip.zip:hover { filter: brightness(1.05); background: var(--orange); }
     .artifact-pane {
       display: flex;
       flex-direction: column;
