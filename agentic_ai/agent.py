@@ -193,6 +193,22 @@ def _needs_tools(text: str) -> bool:
     return bool(_LIVE_DATA_RE.search(body))
 
 
+_PHOTO_QUESTION_RE = re.compile(
+    r"""(?ix)
+    \b(
+      (what|whats|what's|kya).{0,40}\b(photo|image|picture|pic|tasveer|image)\b
+      | \b(describe|explain|dekh|dekho|batao|bataye).{0,40}\b(photo|image|picture|pic|tasveer)\b
+      | \b(photo|image|picture|pic|tasveer).{0,40}\b(mein|me|main|in|is|hai|kya)\b
+    )
+    """
+)
+
+
+def _is_photo_question(text: str) -> bool:
+    body = re.sub(r"\n\nReply in (Hindi|Bhojpuri)\.\s*$", "", text or "").strip()
+    return bool(_PHOTO_QUESTION_RE.search(body))
+
+
 class Agent:
     """ReAct-style agent: reason → call tools → observe → repeat → answer."""
 
@@ -226,10 +242,18 @@ class Agent:
         safe_images = [
             url
             for url in (images or [])[:4]
-            if isinstance(url, str) and url.startswith("data:image/") and len(url) < 2_500_000
+            if isinstance(url, str) and url.startswith("data:image/") and len(url) < 4_000_000
         ]
         if not safe_images and _is_creator_question(text):
             answer = _creator_reply(text)
+            self.memory.add("user", text)
+            self.memory.add("assistant", answer)
+            return answer
+        if not safe_images and _is_photo_question(text):
+            answer = (
+                "I do not see a photo attached. Use + → Take photo or Choose from gallery, "
+                "then send your question again."
+            )
             self.memory.add("user", text)
             self.memory.add("assistant", answer)
             return answer
@@ -245,7 +269,15 @@ class Agent:
         model = self.llm.settings.vision_model if safe_images else None
         dropped_tools = False
         vision_fallback_i = 0
-        steps = 1 if not use_tools else self.max_steps
+        # Vision/no-tools used to be steps=1, so empty answers or model fallbacks
+        # immediately showed the misleading "step limit" message.
+        if safe_images:
+            steps = max(4, len(_GROQ_VISION_FALLBACKS) + 2)
+        elif use_tools:
+            steps = self.max_steps
+        else:
+            steps = 3
+        empty_retries = 0
 
         for step in range(1, steps + 1):
             self.on_trace(f"thinking:{step}")
@@ -263,6 +295,7 @@ class Agent:
                     if nxt:
                         model = nxt
                         vision_fallback_i += 1
+                        self.on_trace(f"thinking:vision-fallback:{nxt}")
                         continue
                 if safe_images and schemas and not dropped_tools:
                     dropped_tools = True
@@ -277,6 +310,11 @@ class Agent:
 
             tool_calls = getattr(message, "tool_calls", None) or []
             if tool_calls:
+                if safe_images:
+                    # Vision answers should not burn steps on tools.
+                    schemas = []
+                    self.on_trace("thinking:drop-tools-for-vision")
+                    continue
                 user_text = _last_user_text(self.memory.messages)
                 repaired = []
                 for call in tool_calls:
@@ -304,7 +342,10 @@ class Agent:
 
             answer = _message_text(message)
             if not answer:
+                empty_retries += 1
                 self.on_trace("thinking:retry")
+                if safe_images and empty_retries >= 2:
+                    break
                 continue
             if _looks_like_raw_dump(answer):
                 self.memory.add("assistant", answer)
@@ -316,7 +357,13 @@ class Agent:
             self.memory.add("assistant", answer)
             return answer
 
-        fallback = "I reached the step limit before finishing. Please ask a narrower question."
+        if safe_images:
+            fallback = (
+                "I could not read that photo. Try a clearer or smaller image, "
+                "or ask again in a moment."
+            )
+        else:
+            fallback = "I reached the step limit before finishing. Please ask a narrower question."
         self.memory.add("assistant", fallback)
         return fallback
 

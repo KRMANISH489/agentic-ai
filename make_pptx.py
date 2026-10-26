@@ -18,7 +18,8 @@ LINE = RGBColor(0xD4, 0xC8, 0xB8)
 W = Inches(13.333)
 H = Inches(7.5)
 OUT = "Agentic_AI_Presentation.pptx"
-TOTAL = 22
+OUT_FULL = "Agentic_AI_Full_Stack_Briefing.pptx"
+TOTAL = 30
 VERSION = "v1.7.0"
 
 
@@ -99,23 +100,24 @@ def title_slide(prs):
     stripe.fill.solid()
     stripe.fill.fore_color.rgb = ORANGE
     stripe.line.fill.background()
-    star(s, Inches(0.85), Inches(1.35), Inches(0.62))
-    textbox(s, Inches(0.85), Inches(2.1), Inches(12), Inches(0.4), "PROJECT BRIEFING", 14, True, ORANGE_DARK)
-    textbox(s, Inches(0.85), Inches(2.5), Inches(12), Inches(1.0), "Agentic AI", 54, True, INK, font="Georgia")
+    star(s, Inches(0.85), Inches(1.2), Inches(0.62))
+    textbox(s, Inches(0.85), Inches(1.95), Inches(12), Inches(0.35), "FULL-STACK PROJECT BRIEFING", 14, True, ORANGE_DARK)
+    textbox(s, Inches(0.85), Inches(2.35), Inches(12), Inches(1.0), "Agentic AI", 54, True, INK, font="Georgia")
     textbox(
         s,
         Inches(0.85),
-        Inches(3.55),
+        Inches(3.4),
         Inches(11.2),
-        Inches(1.0),
-        "A local ReAct assistant that thinks, uses tools, reads files, runs code, and answers like a teammate.",
+        Inches(0.9),
+        "Complete website walkthrough — Frontend (Next.js) → Backend (FastAPI) → Agent core → Deploy.",
         22,
         False,
         MUTED,
     )
-    textbox(s, Inches(0.85), Inches(5.2), Inches(11), Inches(0.35), "Features  ·  How it works  ·  Benefits  ·  Full project knowledge", 16, True, ORANGE_DARK)
-    textbox(s, Inches(0.85), Inches(5.7), Inches(11), Inches(0.35), "Python  ·  FastAPI  ·  Next.js  ·  Groq    |    Built by Abhishek Mishra", 16, False, INK)
-    textbox(s, Inches(0.85), Inches(6.15), Inches(11), Inches(0.35), f"{VERSION}  ·  http://127.0.0.1:3000  ·  Live on Render", 14, False, MUTED)
+    textbox(s, Inches(0.85), Inches(4.55), Inches(11), Inches(0.35), "UI  ·  APIs  ·  ReAct agent  ·  Tools  ·  Auth  ·  Docker", 16, True, ORANGE_DARK)
+    textbox(s, Inches(0.85), Inches(5.15), Inches(11), Inches(0.35), "Python  ·  FastAPI  ·  Next.js 15  ·  React 19  ·  Groq", 16, False, INK)
+    textbox(s, Inches(0.85), Inches(5.65), Inches(11), Inches(0.35), f"{VERSION}  ·  Local :3000 / :7860  ·  Live on Render", 14, False, MUTED)
+    textbox(s, Inches(0.85), Inches(6.15), Inches(11), Inches(0.35), "Built by Abhishek Mishra", 16, True, INK)
 
 
 def content_slide(prs, title, items, page, size=20):
@@ -128,7 +130,7 @@ def content_slide(prs, title, items, page, size=20):
     return s
 
 
-def cards_slide(prs, title, cards, page):
+def cards_slide(prs, title, cards, page, body_size=15):
     s = prs.slides.add_slide(prs.slide_layouts[6])
     add_bg(s)
     bar(s)
@@ -142,7 +144,7 @@ def cards_slide(prs, title, cards, page):
         x = left + i * (cw + gap)
         card(s, x, Inches(1.4), cw, Inches(5.0), WHITE)
         textbox(s, x + Inches(0.28), Inches(1.65), cw - Inches(0.5), Inches(0.9), h, 18, True, ORANGE_DARK)
-        textbox(s, x + Inches(0.28), Inches(2.55), cw - Inches(0.5), Inches(3.5), body, 15, False, INK)
+        textbox(s, x + Inches(0.28), Inches(2.55), cw - Inches(0.5), Inches(3.5), body, body_size, False, INK)
     footer(s, page)
 
 
@@ -178,27 +180,43 @@ def rows_slide(prs, title, rows, page):
     footer(s, page)
 
 
+def section_slide(prs, eyebrow, title, subtitle, page):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_bg(s, CREAM)
+    stripe = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(0.28), H)
+    stripe.fill.solid()
+    stripe.fill.fore_color.rgb = ORANGE
+    stripe.line.fill.background()
+    textbox(s, Inches(0.85), Inches(2.4), Inches(11), Inches(0.4), eyebrow, 14, True, ORANGE_DARK)
+    textbox(s, Inches(0.85), Inches(2.9), Inches(11.5), Inches(1.0), title, 44, True, INK, font="Georgia")
+    textbox(s, Inches(0.85), Inches(4.1), Inches(11), Inches(0.8), subtitle, 20, False, MUTED)
+    footer(s, page)
+
+
 def main():
     prs = Presentation()
     prs.slide_width = W
     prs.slide_height = H
 
+    # 1
     title_slide(prs)
 
+    # 2
     content_slide(
         prs,
-        "Agenda",
+        "Agenda — Frontend to Backend",
         [
-            "What Agentic AI is, and how it differs from a normal chatbot",
-            "The problem it solves and the benefits for a student, shop, or team",
-            "Architecture: Next.js UI + FastAPI agent + Groq LLM",
-            "Every feature in v1.7.0 — chat, Code mode, files, Teach, Projects, Notes, sandbox, artifacts",
-            "How the ReAct loop thinks, calls tools, and answers",
-            "How to run it locally, demo it, and what this project is not",
+            "What the product is and why it is an agent, not a plain chatbot",
+            "End-to-end architecture: Browser → Next.js → FastAPI → Agent → LLM/Tools",
+            "Frontend deep dive: pages, AppClient, Artifacts, SEO, proxy",
+            "Backend deep dive: every /api route, auth, streaming chat, file extract",
+            "Agent core: ReAct loop, tools, Teach memory, sandbox, page builds",
+            "Deploy path: local dual-process vs one Docker image on Render",
         ],
         2,
     )
 
+    # 3
     compare_slide(
         prs,
         "Chatbot vs Agentic AI",
@@ -211,355 +229,465 @@ def main():
             "You copy-paste everything yourself",
             "Looks smart, but it cannot act",
         ],
-        "This project — an agent",
+        "This website — an agent",
         [
             "Thinks: answer now, or call a tool?",
             "Acts: search, weather, math, notes, Python",
             "Observes the tool result, then continues",
             "Reads PDFs, photos, and project files",
             "Remembers Teach notes and project instructions",
-            "Shows the work in chat, Artifacts, and Notes",
+            "Delivers chat + Artifacts preview + Notes",
         ],
         3,
     )
 
-    content_slide(
+    # 4
+    section_slide(
         prs,
-        "The idea",
-        [
-            "The model is not hidden inside LangGraph or CrewAI — the ReAct loop is our own Python.",
-            "You can see Think → Act → Observe → Answer. That is the whole point of this learning project.",
-            "The chat feels like a teammate: cream/gold UI, name greeting, voice, files, and a side panel for work.",
-            "Tools stay behind the scenes. The user sees “Searching the web…” then a clear answer with sources.",
-            "It runs on your machine (or one Docker host). The Groq key stays in .env — never shown in the UI.",
-        ],
+        "PART 1",
+        "System architecture",
+        "How the full website is wired from the browser to Groq.",
         4,
     )
 
-    content_slide(
+    # 5
+    cards_slide(
         prs,
-        "Benefits",
+        "Three layers of the product",
         [
-            "Faster answers with live facts — weather, gold, news — instead of guessing from training data.",
-            "One place for a shop or class: standing instructions, PDFs, and chats live inside a Project.",
-            "You can teach it your name, tone, and facts without training a new neural model.",
-            "It can draft a webpage or graphic and open it in Artifacts — not just dump code in chat.",
-            "Short Python runs in a locked sandbox, so numbers and scripts are checked, not invented.",
-            "Hindi and Bhojpuri replies, voice in/out, so it works for people who prefer speaking.",
-            "You learn real agent design: tools, memory, streaming, auth — not a black-box demo.",
+            (
+                "1 · Frontend",
+                "Next.js 15 · React 19 · TypeScript\n\nChat UI, sidebar, Artifacts, Settings, Projects, Notes, About, SEO.\n\nPort 3000\nRewrites /api/* → FastAPI",
+            ),
+            (
+                "2 · Backend API",
+                "FastAPI + Uvicorn\n\nAuth, SSE chat stream, extract, Teach, notes, tools, settings.\n\nPort 7860\nCookie sessions",
+            ),
+            (
+                "3 · Agent core",
+                "Custom ReAct (not LangGraph)\n\nLLM client + tool catalog + memory.\nOptional Researcher + Writer crew.\nSandbox for short Python.",
+            ),
         ],
         5,
-        size=18,
+        body_size=14,
     )
 
-    cards_slide(
+    # 6
+    content_slide(
         prs,
-        "Who it helps",
+        "Request journey (one chat message)",
         [
-            (
-                "Student / builder",
-                "See a real ReAct loop, add a tool, ship a UI. Better than only watching a framework tutorial.",
-            ),
-            (
-                "Shop or small team",
-                "Teach brand facts, drop a price list PDF into a Project, ask in Hindi, export the chat.",
-            ),
-            (
-                "Anyone who asks daily",
-                "Weather, math, GitHub lookup, “make me a landing page”, “save this as a note”.",
-            ),
+            "Browser (AppClient) POSTs /api/chat with message, mode, history, images, lang, focus.",
+            "Next.js rewrite proxies /api/* to http://127.0.0.1:7860 (same origin cookies + SSE).",
+            "FastAPI checks session cookie → builds prompt extras (Teach, project files, Code/page mode).",
+            "Agent or Crew runs ReAct: Think → tool calls → Observe → streamed tokens.",
+            "UI shows live status (“Searching the web…”), then markdown reply; artifacts open in the side pane.",
+            "Optional: ZIP download of HTML/code; Pollinations images auto-injected into landing pages.",
         ],
         6,
+        size=17,
     )
 
-    cards_slide(
+    # 7
+    content_slide(
         prs,
-        "Architecture",
+        "Tech stack map",
         [
-            (
-                "Frontend",
-                "Next.js 15 · React · TypeScript\n\nChat, sidebar, Artifacts, Settings, Projects, Notes.\n\nhttp://127.0.0.1:3000\nProxies /api to Python so cookies and SSE streaming work.",
-            ),
-            (
-                "Backend",
-                "FastAPI + Uvicorn\n\nLogin, chat stream, extract files, Teach, notes APIs, tool install.\n\nhttp://127.0.0.1:7860",
-            ),
-            (
-                "Agent core",
-                "Custom ReAct Agent\n(not LangGraph)\n\nLLM + tools + memory.\nOptional crew: Researcher then Writer.\nSandbox for short Python.",
-            ),
+            "LLM: Groq openai/gpt-oss-120b (OpenAI-compatible). Also OpenAI, OpenRouter, or Ollama.",
+            "Vision: Groq qwen/qwen3.6-27b — gallery / camera photos (up to 4).",
+            "Backend: Python 3.10+ · FastAPI · Uvicorn · httpx · itsdangerous · pypdf · python-multipart",
+            "Frontend: Next.js 15 · React 19 · TypeScript · marked (chat markdown)",
+            "Tools: DuckDuckGo search · wttr.in weather · notes as .md on disk · locked code_run",
+            "UI brand: cream sidebar #dacebe, paper #f1f1f1, gold #db8f2a, Fraunces + Figtree",
+            "Deploy: one Docker image (Node build + Python runtime) on Render / HF Spaces",
         ],
         7,
+        size=17,
     )
 
-    content_slide(
+    # 8
+    section_slide(
         prs,
-        "Tech stack",
-        [
-            "LLM: Groq openai/gpt-oss-120b (OpenAI-compatible API). Also OpenAI, OpenRouter, or Ollama.",
-            "Vision: Groq qwen/qwen3.6-27b — reads photos from gallery or camera.",
-            "Python 3.10+  ·  FastAPI  ·  Uvicorn  ·  httpx  ·  itsdangerous  ·  pypdf  ·  python-multipart",
-            "Next.js 15  ·  React 19  ·  TypeScript  ·  marked for chat markdown",
-            "Search: DuckDuckGo (ddgs). Weather: wttr.in. Notes saved as .md on disk.",
-            "UI: cream sidebar #dacebe, chat paper #f1f1f1, gold accent #db8f2a, Fraunces + Figtree.",
-            "Deploy: one Docker image on Render or Hugging Face Spaces. Vercel alone cannot run the Python API.",
-        ],
+        "PART 2",
+        "Frontend — the website UI",
+        "Next.js App Router, chat shell, artifacts, and how /api is proxied.",
         8,
-        size=18,
     )
 
+    # 9
     content_slide(
         prs,
-        "Feature map — what v1.7.0 can do",
+        "Frontend folder map",
         [
-            "Chat: markdown, Recents search, edit a sent message, Retry, Export chat as .md",
-            "Voice: microphone in, speaker out, English / Hindi / Bhojpuri",
-            "Files: PDF, Word, txt, md, csv, json — plus photos and camera",
-            "Teach: instructions, facts, and up to 5 training files on every chat (memory, not GPU training)",
-            "Projects: name, standing instructions, files, and chats grouped together",
-            "Notes viewer: agent saves markdown; you open, download, or delete it in the app",
-            "Artifacts: HTML / SVG / markdown / code opens in a side pane",
-            "Code sandbox: short Python, no network, no files, 6 second limit",
+            "frontend/src/app/page.tsx — home; mounts AppClient (the whole chat product)",
+            "frontend/src/app/layout.tsx — metadata, fonts, Google verification, JSON-LD hooks",
+            "frontend/src/app/about/page.tsx + AboutFaq — public About / FAQ for SEO",
+            "frontend/src/app/sitemap.ts · robots.ts · manifest.ts · opengraph-image.tsx",
+            "frontend/src/app/auth/[...path]/route.ts — auth path bridge when needed",
+            "frontend/src/components/AppClient.tsx — login, chat, tools, projects, voice, landing picker",
+            "frontend/src/components/ArtifactPane.tsx — Preview / Code / File / ZIP for artifacts",
+            "frontend/src/lib/* — artifacts, pageImages, zip, types, seo helpers",
         ],
         9,
-        size=18,
+        size=16,
     )
 
+    # 10
     rows_slide(
         prs,
-        "Chat experience",
+        "UI surfaces the user sees",
         [
             ("Login & greeting", "Name + email, or Google / GitHub. Empty state: “Ready to leap, {name}?”"),
-            ("Sidebar", "New leap, project picker, Single agent vs Researcher + Writer, Recents search, profile menu"),
-            ("Composer", "+ attach (photo, camera, file), microphone, Enter to send (optional in Settings)"),
-            ("After a reply", "Copy, speak, Retry last answer, or edit your bubble and Save & retry"),
-            ("Language", "English, Hindi, or Bhojpuri — the agent is told to reply in that language"),
+            ("Sidebar", "New leap, project picker, Single agent vs Researcher + Writer, Recents, profile"),
+            ("Composer", "+ menu: Take photo · Gallery · Upload file · Landing page · mic · send"),
+            ("Chat / Code focus", "Code mode asks for full working fixes; Chat mode can teach in plain language"),
+            ("After a reply", "Copy, speak aloud, Retry, edit your bubble and Save & retry"),
         ],
         10,
     )
 
+    # 11
     cards_slide(
         prs,
-        "Files, photos, Teach",
+        "Frontend feature modules",
         [
             (
-                "Drop a file",
-                "PDF, .docx, txt, md, csv, json. Text is extracted and wrapped as ---file:name--- so the agent quotes the real document.",
+                "Artifacts pane",
+                "Parses <artifact> tags and previewable fences.\n\nHTML preview + Pollinations image fill.\n\nDownload File or ZIP (multi-file).",
             ),
             (
-                "Photos",
-                "Up to 4 images, gallery or camera. Vision model answers from what is in the picture — it should not invent details.",
+                "Landing page picker",
+                "Shop, SaaS, restaurant, portfolio…\n\nBuilds a typed premium-page prompt.\n\nOpens as HTML artifact automatically.",
             ),
             (
-                "Teach (Settings)",
-                "How it should behave + facts to remember + training files (max 5). Injected on every chat. This is memory, not a new neural net.",
+                "Settings tabs",
+                "Tools Install/Uninstall\nFeatures toggles\nTeach (instructions + facts + files)\nAbout / model chip",
             ),
         ],
         11,
+        body_size=14,
     )
 
-    cards_slide(
-        prs,
-        "Projects, Notes, Artifacts",
-        [
-            (
-                "Projects",
-                "Like a folder: name, standing instructions, up to 8 files. Recents filter to that project. Context is sent with every message.",
-            ),
-            (
-                "Notes",
-                "Ask it to save a markdown note. Open Notes from the profile menu to read, download, or delete workspace_notes/*.md.",
-            ),
-            (
-                "Artifacts",
-                "Ask for a webpage, poster, or SVG. The agent emits an artifact tag. A pane on the right previews the file.",
-            ),
-        ],
-        12,
-    )
-
+    # 12
     content_slide(
         prs,
-        "Code sandbox",
+        "Next.js ↔ API proxy",
         [
-            "Tool: code_run — core utility, always installed.",
-            "Runs short Python in a child process (isolated interpreter, 6 second timeout).",
-            "Allowed: math, json, re, datetime, statistics, random, and similar stdlib. print() is required for output.",
-            "Blocked: os, subprocess, open(), eval/exec, network, installs, arbitrary files.",
-            "Use it for exact numbers, small scripts, and checks — not as a full IDE or Claude Code clone.",
+            "next.config.ts rewrites /api/:path* → API_ORIGIN (default http://127.0.0.1:7860).",
+            "Browser always talks to same origin (:3000), so cookies and EventSource/SSE stay simple.",
+            "Local: two processes (Next + FastAPI). Docker: start.sh runs both; public port 3000.",
+            "Vercel alone cannot host the Python agent — rewrite would point at a missing API.",
+            "Auth OAuth callbacks must use http://127.0.0.1:3000 (Google rejects bare localhost).",
+            "SEO routes (sitemap, robots, About) are pure Next — no FastAPI needed.",
         ],
+        12,
+        size=17,
+    )
+
+    # 13
+    section_slide(
+        prs,
+        "PART 3",
+        "Backend — FastAPI website API",
+        "Every route that powers login, chat streaming, files, Teach, and notes.",
         13,
     )
 
+    # 14
+    content_slide(
+        prs,
+        "API route map (app.py)",
+        [
+            "Identity: GET /api/me · POST /api/auth/local · POST /api/auth/keys · /auth/logout",
+            "OAuth: /auth/google · /auth/github · callbacks → set httpOnly session cookie",
+            "Health: GET /api/status · POST /api/reset · POST /api/setup (Groq key)",
+            "Prefs: GET/POST /api/settings · POST /api/tools/install · /api/tools/uninstall",
+            "Files: POST /api/extract · POST /api/teach/file · POST /api/teach/forget",
+            "Notes: GET /api/notes · GET/DELETE /api/notes/{name}",
+            "Chat: POST /api/chat — Server-Sent Events (token stream + tool status events)",
+        ],
+        14,
+        size=17,
+    )
+
+    # 15
+    cards_slide(
+        prs,
+        "Backend packages (agentic_ai/)",
+        [
+            (
+                "agent.py · crew.py",
+                "ReAct single agent.\nCrew = Researcher then Writer.\nVision + artifact + page-design instructions.",
+            ),
+            (
+                "tools.py · sandbox.py",
+                "Tool catalog + handlers.\ncode_run in locked child process (6s, no net/files).",
+            ),
+            (
+                "auth · files · prefs",
+                "Cookie sessions + OAuth.\nPDF/docx/text extract.\nsettings.json + CORE_TOOLS + Teach.",
+            ),
+        ],
+        15,
+        body_size=14,
+    )
+
+    # 16
+    content_slide(
+        prs,
+        "Chat endpoint internals",
+        [
+            "Requires logged-in session. Body: message, mode, history, images[], lang, focus, project context.",
+            "Prompt assembly: system rules + Teach block + IT playbook + project files + attached file text.",
+            "Code focus note: ship complete runnable code; page-build note: PREMIUM_PAGE_DESIGN brief.",
+            "mode=agent → Agent.ask(…, on_token=…) · mode=crew → Crew.run(…).",
+            "SSE events: status lines for tools, then token deltas, then done / error.",
+            "Photos: data:image URLs → vision model; tools skipped while answering from a picture.",
+        ],
+        16,
+        size=17,
+    )
+
+    # 17
+    section_slide(
+        prs,
+        "PART 4",
+        "Agent intelligence layer",
+        "ReAct loop, tools, memory, sandbox, and premium page generation.",
+        17,
+    )
+
+    # 18
+    content_slide(
+        prs,
+        "How the agent thinks (ReAct)",
+        [
+            "Think — LLM decides: greet, answer, or call a tool.",
+            "Act — tool call with clean JSON, e.g. {\"query\": \"today gold price India\"}.",
+            "Observe — tool result is appended to memory for the next step.",
+            "Repeat — up to max_steps (default 8), then a human answer (not raw JSON).",
+            "Guardrails: repair bad Groq tool calls, cite sources, do not invent URLs or numbers.",
+            "Extras: language (EN/HI/Bhojpuri), Teach, project files, photos, Code / page-build notes.",
+        ],
+        18,
+        size=17,
+    )
+
+    # 19
     s = prs.slides.add_slide(prs.slide_layouts[6])
     add_bg(s)
     bar(s)
-    textbox(s, Inches(0.7), Inches(0.35), Inches(12), Inches(0.6), "Tools", 32, True, INK, font="Georgia")
+    textbox(s, Inches(0.7), Inches(0.35), Inches(12), Inches(0.6), "Tools catalog", 32, True, INK, font="Georgia")
     groups = [
-        ("Core (ready by default)", "Web Search  ·  Wikipedia  ·  Weather  ·  Calculator  ·  Clock  ·  Notes  ·  Code sandbox"),
-        ("Install when you need them", "GitHub lookup  ·  Dice  ·  Unit Convert  ·  Text Stats  ·  UUID  ·  Random Pick"),
-        ("How they feel", "Settings → Tools: Install / Uninstall. The agent only calls what is installed. Status shows “Searching the web…”"),
+        ("Core (ready by default)", "Web Search · Wikipedia · Weather · Calculator · Clock · Notes · Code sandbox"),
+        ("Install when needed", "GitHub lookup · Dice · Unit Convert · Text Stats · UUID · Random Pick"),
+        ("How it feels in the UI", "Settings → Tools: Install / Uninstall. Agent only sees installed tools. Status: “Searching the web…”"),
     ]
     for i, (h, body) in enumerate(groups):
         y = Inches(1.25) + i * Inches(1.7)
         card(s, Inches(0.7), y, Inches(11.9), Inches(1.5))
         textbox(s, Inches(1.0), y + Inches(0.22), Inches(11.3), Inches(0.45), h, 20, True, ORANGE_DARK)
         textbox(s, Inches(1.0), y + Inches(0.7), Inches(11.3), Inches(0.6), body, 18, False, INK)
-    footer(s, 14)
+    footer(s, 19)
 
-    content_slide(
+    # 20
+    cards_slide(
         prs,
-        "Two ways to work",
+        "Memory, files, and page builds",
         [
-            "Single agent — one assistant for quick questions, weather, prices, files, and code.",
-            "Researcher + Writer — first agent gathers facts (search, wiki, weather, GitHub).",
-            "Writer turns the brief into a clear answer and may use calculator, clock, notes, or sandbox.",
-            "Switch from the sidebar dropdown before you send. Crew is better for long research.",
-            "Show thinking: live status while tools run. Max steps default 8. Temperature default 0.2.",
-        ],
-        15,
-    )
-
-    content_slide(
-        prs,
-        "How the agent thinks (ReAct)",
-        [
-            "Think — the LLM decides: greet, answer, or call a tool.",
-            "Act — it calls a tool with clean JSON, e.g. {\"query\": \"today gold price India\"}.",
-            "Observe — the tool result is added to memory for the next step.",
-            "Repeat — up to max steps, then write a human answer (not JSON, not a raw dump).",
-            "Guardrails: repair bad Groq tool calls, cite sources, do not invent URLs or numbers.",
-            "Extras in the prompt: language, Teach block, project files, attached file text, photos.",
-        ],
-        16,
-    )
-
-    content_slide(
-        prs,
-        "Login and security",
-        [
-            "Local login: name + email, signed httpOnly cookie session.",
-            "Google and GitHub OAuth. Callback must use http://127.0.0.1:3000 (not localhost) for Google.",
-            "Chat, tools, notes, extract, and settings APIs require a logged-in session.",
-            "Groq API key lives in .env / server env. The UI never prints it back.",
-            "Sandbox has no network and a short timeout. Teach is instruction memory, not model weights.",
-            "Do not commit .env. Notes folder workspace_notes/ is gitignored.",
-        ],
-        17,
-    )
-
-    content_slide(
-        prs,
-        "How to run (Windows)",
-        [
-            "Terminal 1:  .\\.venv\\Scripts\\python.exe app.py     → API on port 7860",
-            "Terminal 2:  cd frontend   then   npm run dev      → UI on port 3000",
-            "Open http://127.0.0.1:3000  — if you see Connection Failed, these two processes are not running.",
-            "Sign in, paste a Groq key if asked (console.groq.com/keys), then chat.",
-            "CLI also works: python main.py  or  python main.py --crew -q \"...\"",
-            "Live: Docker on Render (agentic-ai-d0cx.onrender.com) or Hugging Face Spaces.",
-        ],
-        18,
-        size=18,
-    )
-
-    content_slide(
-        prs,
-        "Demo script",
-        [
-            "1. “Hello” — personal greeting, no tools.",
-            "2. “Delhi weather” then “today gold price in India”.",
-            "3. Attach a PDF: “summarize this file”.",
-            "4. Settings → Teach: add your name and shop facts, Save training, new chat, ask “what do you know about me?”",
-            "5. + Project, add a file, ask a question that needs that file.",
-            "6. “Make a simple landing page for my shop” — Artifacts pane opens.",
-            "7. “Run Python: print(sum(range(1, 11)))”. Then “save this as a note” and open Notes.",
-            "8. Mic to speak, speaker to hear, Retry, Export chat.",
-        ],
-        19,
-        size=18,
-    )
-
-    content_slide(
-        prs,
-        "Project structure",
-        [
-            "agentic_ai/agent.py — ReAct loop, Teach block, vision, artifacts instruction",
-            "agentic_ai/tools.py — catalog + handlers (search, weather, notes, …)",
-            "agentic_ai/sandbox.py — locked-down code_run",
-            "agentic_ai/files.py — PDF / docx / text extract    prefs.py — settings.json + CORE_TOOLS",
-            "agentic_ai/crew.py — Researcher + Writer    auth.py — sessions and OAuth",
-            "app.py — FastAPI: /api/chat (SSE), /api/extract, /api/teach/*, /api/notes",
-            "frontend/ — Next.js AppClient, ArtifactPane, Projects, Notes overlay",
-            "main.py — CLI    Dockerfile — one-container deploy",
+            (
+                "Teach + Projects",
+                "Instructions, facts, up to 5 Teach files.\nProject: name, standing rules, up to 8 files.\nInjected every chat — memory, not GPU training.",
+            ),
+            (
+                "Vision + extract",
+                "Photos: gallery or camera, max 4.\nFiles: PDF, Word, txt, md, csv, json.\nWrapped as ---file:name--- for quoting.",
+            ),
+            (
+                "Premium HTML pages",
+                "page_design.py brief + Pollinations URLs.\nfrontend pageImages.ts fills missing imgs.\nPreview + ZIP download in ArtifactPane.",
+            ),
         ],
         20,
-        size=17,
+        body_size=14,
     )
 
-    compare_slide(
+    # 21
+    content_slide(
         prs,
-        "Honest scope — what it is not",
-        "This app does",
+        "Code sandbox (code_run)",
         [
-            "ReAct agent with real tools you can read in Python",
-            "Chat UI with files, voice, projects, notes, artifacts",
-            "Memory via Teach + project files (prompt context)",
-            "Short sandboxed Python",
-            "Local or one Docker host",
-        ],
-        "It does not (on purpose)",
-        [
-            "Clone Claude Code or Computer Use",
-            "Fine-tune / train a new neural model on GPU",
-            "Give the model your whole OS or browser",
-            "Connect Gmail / Drive / Calendar (no extra OAuth yet)",
-            "Replace LangGraph for huge production graphs",
+            "Short Python in a child process — isolated interpreter, 6 second timeout.",
+            "Allowed: math, json, re, datetime, statistics, random, and similar stdlib. print() for output.",
+            "Blocked: os, subprocess, open(), eval/exec, network, installs, arbitrary files.",
+            "Use for exact numbers and tiny scripts — not a full IDE or computer-use agent.",
+            "Always a CORE tool; users do not uninstall it from the default set.",
         ],
         21,
     )
 
+    # 22
+    content_slide(
+        prs,
+        "Two working modes",
+        [
+            "Single agent — one assistant for quick Q&A, weather, prices, files, and code.",
+            "Researcher + Writer — first agent gathers facts (search, wiki, weather, GitHub).",
+            "Writer turns the brief into a clear answer; may use calculator, clock, notes, sandbox.",
+            "Switch from the sidebar before you send. Crew fits longer research.",
+            "Show thinking: live tool status. Temperature default 0.2. Max steps default 8.",
+        ],
+        22,
+    )
+
+    # 23
+    section_slide(
+        prs,
+        "PART 5",
+        "Security, run, deploy",
+        "Sessions, secrets, local dual-process, and one-container production.",
+        23,
+    )
+
+    # 24
+    content_slide(
+        prs,
+        "Login and security",
+        [
+            "Local login: name + email → signed httpOnly cookie (itsdangerous).",
+            "Google / GitHub OAuth; callbacks through the Next origin on port 3000.",
+            "Protected: chat, tools, notes, extract, settings. Public: About, sitemap, robots.",
+            "GROQ_API_KEY stays in .env / host env — never echoed back in the UI.",
+            "Sandbox: no network, short timeout. Teach = prompt memory, not weight updates.",
+            "Do not commit .env. workspace_notes/ is gitignored.",
+        ],
+        24,
+        size=17,
+    )
+
+    # 25
+    compare_slide(
+        prs,
+        "Local run vs Docker deploy",
+        "Local (dev)",
+        [
+            "Terminal 1: python app.py → :7860",
+            "Terminal 2: cd frontend && npm run dev → :3000",
+            "Open http://127.0.0.1:3000",
+            "Hot reload on both sides",
+            "CLI: python main.py [--crew] -q \"…\"",
+            "Paste Groq key if /api/setup asks",
+        ],
+        "Production (Docker)",
+        [
+            "Dockerfile: build Next, then Python image",
+            "start.sh runs API + next start",
+            "Public PORT=3000 (Render / HF Spaces)",
+            "Set GROQ_API_KEY in host env",
+            "One service — Vercel alone is not enough",
+            "Live: agentic-ai-d0cx.onrender.com",
+        ],
+        25,
+    )
+
+    # 26
+    content_slide(
+        prs,
+        "Project structure (repo map)",
+        [
+            "app.py — FastAPI entry: routes, SSE chat, page-build / code-focus prompt notes",
+            "agentic_ai/agent.py · crew.py · llm.py · tools.py · sandbox.py · page_design.py",
+            "agentic_ai/auth.py · files.py · prefs.py · memory.py · config.py · canva.py",
+            "frontend/ — Next.js App Router UI + ArtifactPane + pageImages + zip",
+            "static/ — legacy/static assets served by API when needed",
+            "main.py — CLI agent · Dockerfile · start.sh · render.yaml · railway.json",
+            "make_pptx.py — this deck generator · IT_Teach_Playbook.txt — default Teach style",
+        ],
+        26,
+        size=16,
+    )
+
+    # 27
+    content_slide(
+        prs,
+        "Demo script (full stack)",
+        [
+            "1. Login → “Hello” (greeting, no tools).",
+            "2. “Delhi weather” then “today gold price in India” (tools + citations).",
+            "3. Attach a PDF: “summarize this file” (extract → agent).",
+            "4. Teach your name/shop → new chat → “what do you know about me?”",
+            "5. Create a Project, add a file, ask a question that needs it.",
+            "6. + → Landing page → Shop — Artifacts preview + ZIP (images included).",
+            "7. “Run Python: print(sum(range(1, 11)))” then “save this as a note”.",
+            "8. Mic / speaker, Retry, Export chat — then open Notes from profile.",
+        ],
+        27,
+        size=16,
+    )
+
+    # 28
+    compare_slide(
+        prs,
+        "Honest scope — what this website is not",
+        "This stack does",
+        [
+            "Full FE+BE product with real tools",
+            "Streaming chat, files, voice, projects",
+            "Teach + project memory in prompts",
+            "Sandboxed Python + HTML artifacts",
+            "One-container Docker deploy",
+        ],
+        "It does not (on purpose)",
+        [
+            "Clone Claude Code or Computer Use",
+            "Fine-tune a neural model on GPU",
+            "Give the model your whole OS/browser",
+            "Ship Gmail/Drive/Calendar OAuth yet",
+            "Replace LangGraph for huge graphs",
+        ],
+        28,
+    )
+
+    # 29
+    content_slide(
+        prs,
+        "Benefits of this architecture",
+        [
+            "Clear ownership: UI owns UX; FastAPI owns sessions and tools; agent owns reasoning.",
+            "Same-origin proxy keeps cookies and SSE simple for a real website feel.",
+            "You can read every tool and the ReAct loop — learning project, not a black box.",
+            "Landing pages ship with preview, ZIP, and auto images — useful demo output.",
+            "Hindi / Bhojpuri + voice make it usable beyond English-only demos.",
+            "Docker path means one deploy story for interviews, teachers, and clients.",
+        ],
+        29,
+        size=17,
+    )
+
+    # 30
     s = prs.slides.add_slide(prs.slide_layouts[6])
     add_bg(s, CREAM)
     stripe = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(0.28), H)
     stripe.fill.solid()
     stripe.fill.fore_color.rgb = ORANGE
     stripe.line.fill.background()
-    star(s, Inches(0.85), Inches(1.7), Inches(0.62))
-    textbox(s, Inches(0.85), Inches(2.5), Inches(12), Inches(0.9), "Thank you", 48, True, INK, font="Georgia")
-    textbox(
-        s,
-        Inches(0.85),
-        Inches(3.45),
-        Inches(11.5),
-        Inches(0.7),
-        "Built and developed by Abhishek Mishra",
-        22,
-        True,
-        ORANGE_DARK,
-    )
-    textbox(
-        s,
-        Inches(0.85),
-        Inches(4.2),
-        Inches(11.5),
-        Inches(0.7),
-        "Questions, ideas, or a live demo — open the app and try the script.",
-        18,
-        False,
-        MUTED,
-    )
-    textbox(s, Inches(0.85), Inches(5.3), Inches(11), Inches(0.35), "http://127.0.0.1:3000", 18, True, INK)
-    textbox(s, Inches(0.85), Inches(5.75), Inches(11), Inches(0.35), "Live: https://agentic-ai-d0cx.onrender.com", 16, False, MUTED)
+    star(s, Inches(0.85), Inches(1.5), Inches(0.62))
+    textbox(s, Inches(0.85), Inches(2.3), Inches(12), Inches(0.9), "Thank you", 48, True, INK, font="Georgia")
+    textbox(s, Inches(0.85), Inches(3.25), Inches(11.5), Inches(0.5), "Full stack: Next.js frontend · FastAPI backend · ReAct agent", 20, True, ORANGE_DARK)
+    textbox(s, Inches(0.85), Inches(3.9), Inches(11.5), Inches(0.5), "Built and developed by Abhishek Mishra", 22, True, INK)
+    textbox(s, Inches(0.85), Inches(4.6), Inches(11.5), Inches(0.5), "Questions or live demo — open the app and run the script.", 18, False, MUTED)
+    textbox(s, Inches(0.85), Inches(5.5), Inches(11), Inches(0.35), "Local: http://127.0.0.1:3000", 18, True, INK)
+    textbox(s, Inches(0.85), Inches(5.95), Inches(11), Inches(0.35), "Live: https://agentic-ai-d0cx.onrender.com", 16, False, MUTED)
 
     saved = []
-    for path in (OUT, "Agentic_AI_Full_Briefing_v1.7.pptx"):
+    for path in (OUT, OUT_FULL, "Agentic_AI_Full_Briefing_v1.7.pptx"):
         try:
             prs.save(path)
             saved.append(path)
         except PermissionError:
             print("locked (close PowerPoint):", path)
     print("saved:", ", ".join(saved) if saved else "none")
+    print("slides:", TOTAL)
 
 
 if __name__ == "__main__":
