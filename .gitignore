@@ -13,6 +13,7 @@ build/
 *.log
 settings.json
 workspace_notes/
+billing_usage.json
 canva_tokens.json
 ~$*
 frontend/.next

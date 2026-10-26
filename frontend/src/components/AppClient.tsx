@@ -6,8 +6,34 @@ import { ArtifactPane } from "@/components/ArtifactPane";
 import { Logo } from "@/components/Logo";
 import { artifactFileBody, artifactFileName } from "@/lib/artifactFiles";
 import { extractArtifacts, type Artifact } from "@/lib/artifacts";
-import type { AppState, ChatItem, ChatMessage, Project, ProjectFile, ToolItem, User } from "@/lib/types";
+import type {
+  AppState,
+  BillingPack,
+  BillingStatus,
+  ChatItem,
+  ChatMessage,
+  Project,
+  ProjectFile,
+  ToolItem,
+  User,
+} from "@/lib/types";
 import { buildZip, downloadBlob } from "@/lib/zip";
+
+type RazorpaySuccess = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayCheckout = {
+  open: () => void;
+};
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
+  }
+}
 
 const STORE_KEY = "agentic.chats.v1";
 const PROJECTS_KEY = "agentic.projects.v1";
@@ -452,6 +478,10 @@ export default function AppClient() {
   const [navOpen, setNavOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [landingOpen, setLandingOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [payBusy, setPayBusy] = useState<string | null>(null);
+  const [payError, setPayError] = useState("");
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [teachInst, setTeachInst] = useState("");
@@ -549,6 +579,7 @@ export default function AppClient() {
         if (data.user) {
           setUser(data.user);
           await loadStatus();
+          await loadBilling();
         }
       } catch {
         setLoginError("API is not running. Start the FastAPI server, then refresh.");
@@ -621,6 +652,104 @@ export default function AppClient() {
     return data;
   }
 
+  async function loadBilling() {
+    try {
+      const res = await fetch("/api/billing/status", { credentials: "include" });
+      if (!res.ok) return null;
+      const data = (await res.json()) as BillingStatus;
+      setBilling(data);
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  function loadRazorpayScript() {
+    return new Promise<boolean>((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve(!!window.Razorpay));
+        existing.addEventListener("error", () => resolve(false));
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(!!window.Razorpay);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  }
+
+  async function buyPack(pack: BillingPack) {
+    setPayError("");
+    setPayBusy(pack.id);
+    try {
+      const orderRes = await fetch("/api/billing/order", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack: pack.id }),
+      });
+      const orderData = await orderRes.json().catch(() => ({}));
+      if (!orderRes.ok) {
+        throw new Error(typeof orderData.detail === "string" ? orderData.detail : "Could not start payment.");
+      }
+      const ready = await loadRazorpayScript();
+      if (!ready || !window.Razorpay) throw new Error("Could not load Razorpay Checkout.");
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay!({
+          key: orderData.key_id,
+          amount: orderData.amount,
+          currency: orderData.currency || "INR",
+          name: "Agentic AI",
+          description: `${pack.title} top-up`,
+          order_id: orderData.order_id,
+          prefill: orderData.prefill || { email: user?.email || "" },
+          theme: { color: "#db8f2a" },
+          handler: async (response: RazorpaySuccess) => {
+            try {
+              const verifyRes = await fetch("/api/billing/verify", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  pack: pack.id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              });
+              const verifyData = await verifyRes.json().catch(() => ({}));
+              if (!verifyRes.ok) {
+                throw new Error(typeof verifyData.detail === "string" ? verifyData.detail : "Payment verify failed.");
+              }
+              setBilling(verifyData as BillingStatus);
+              setPayOpen(false);
+              setVoiceHint(`${pack.title} credits added. You can keep chatting.`);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          },
+          modal: {
+            ondismiss: () => resolve(),
+          },
+        });
+        rzp.open();
+      });
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : "Payment failed.");
+    } finally {
+      setPayBusy(null);
+    }
+  }
+
   async function localLogin(e: FormEvent) {
     e.preventDefault();
     setLoginError("");
@@ -644,6 +773,7 @@ export default function AppClient() {
     }
     setUser(me.user);
     await loadStatus();
+    await loadBilling();
   }
 
   async function saveOauth(e: FormEvent) {
@@ -946,14 +1076,26 @@ export default function AppClient() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const detail = typeof data.detail === "string" ? data.detail : `Chat failed (${res.status})`;
         if (res.status === 401) {
           setUser(null);
           setLoginError("Session expired. Please sign in again to continue.");
           throw new Error("Login required — please sign in again.");
         }
+        if (res.status === 402 || data.code === "quota_exceeded") {
+          if (data.billing) setBilling(data.billing as BillingStatus);
+          else await loadBilling();
+          setPayError("");
+          setPayOpen(true);
+          throw new Error(
+            typeof data.detail === "string"
+              ? data.detail
+              : "Daily free limit reached. Buy a Student or Business top-up."
+          );
+        }
+        const detail = typeof data.detail === "string" ? data.detail : `Chat failed (${res.status})`;
         throw new Error(detail);
       }
+      void loadBilling();
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No response stream");
       const decoder = new TextDecoder();
@@ -1807,6 +1949,19 @@ export default function AppClient() {
               ? `v${appState.version} · ${appState.provider} · ${appState.model}`
               : `v${appState.version || ""} · API key missing`}
           </div>
+          {billing ? (
+            <button
+              type="button"
+              className="credit-chip"
+              onClick={() => {
+                setPayError("");
+                setPayOpen(true);
+              }}
+              title="Free daily quota + paid top-up credits"
+            >
+              <strong>{billing.chats_left}</strong> chats · <strong>{billing.photos_left}</strong> photos
+            </button>
+          ) : null}
         </aside>
 
         <section className="main">
@@ -2204,7 +2359,14 @@ export default function AppClient() {
               </button>
             </form>
             {voiceHint ? <p className="voice-hint">{voiceHint}</p> : null}
-            
+            {billing && billing.chats_left <= 3 ? (
+              <p className="voice-hint">
+                Low credits ({billing.chats_left} chats left).{" "}
+                <button type="button" className="linkish" onClick={() => setPayOpen(true)}>
+                  Top up
+                </button>
+              </p>
+            ) : null}
           </div>
         </section>
         {showArtifact && paneArtifactId ? (
@@ -2569,6 +2731,52 @@ export default function AppClient() {
                 <strong>{kind.title}</strong>
                 <span>{kind.sections.split(",")[0].trim()}</span>
               </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={`overlay ${payOpen ? "open" : ""}`} onClick={(e) => e.target === e.currentTarget && setPayOpen(false)}>
+        <div className="settings pay-modal">
+          <div className="settings-head">
+            <h2>Top up credits</h2>
+            <button className="close-x" type="button" onClick={() => setPayOpen(false)} aria-label="Close">
+              ×
+            </button>
+          </div>
+          <p className="landing-lead">
+            Free: {billing?.free_chats_per_day ?? 20} chats and {billing?.free_photos_per_day ?? 5} photo messages per day.
+            Student is a smaller pack for learning. Business is a larger pack for shops and teams. Credits stack on top of free daily quota.
+          </p>
+          {billing ? (
+            <p className="pay-remain">
+              Left now: <strong>{billing.chats_left}</strong> chats · <strong>{billing.photos_left}</strong> photos
+              {billing.paid_chat_credits || billing.paid_photo_credits
+                ? ` (includes ${billing.paid_chat_credits} paid chats, ${billing.paid_photo_credits} paid photos)`
+                : ""}
+            </p>
+          ) : null}
+          {!billing?.configured ? (
+            <p className="pay-error">Payments are not configured on this server yet (Razorpay keys missing).</p>
+          ) : null}
+          {payError ? <p className="pay-error">{payError}</p> : null}
+          <div className="landing-grid">
+            {(billing?.packs || []).map((pack) => (
+              <div className="landing-card pay-card" key={pack.id}>
+                <strong>{pack.title}</strong>
+                <span>{pack.blurb}</span>
+                <em>
+                  +{pack.chat_credits} chats · +{pack.photo_credits} photos
+                </em>
+                <button
+                  type="button"
+                  className="pay-btn"
+                  disabled={!!payBusy || !billing?.configured}
+                  onClick={() => void buyPack(pack)}
+                >
+                  {payBusy === pack.id ? "Opening…" : `Pay ₹${pack.price_inr}`}
+                </button>
+              </div>
             ))}
           </div>
         </div>

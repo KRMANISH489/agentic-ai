@@ -64,3 +64,25 @@ export type AppState = {
   prefs?: Prefs;
   tools?: ToolItem[];
 };
+
+export type BillingPack = {
+  id: string;
+  title: string;
+  blurb: string;
+  price_inr: number;
+  chat_credits: number;
+  photo_credits: number;
+};
+
+export type BillingStatus = {
+  configured: boolean;
+  free_chats_per_day: number;
+  free_photos_per_day: number;
+  free_chats_left: number;
+  free_photos_left: number;
+  paid_chat_credits: number;
+  paid_photo_credits: number;
+  chats_left: number;
+  photos_left: number;
+  packs: BillingPack[];
+};

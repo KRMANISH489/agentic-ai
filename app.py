@@ -41,6 +41,15 @@ from agentic_ai.canva import (
     set_pkce_cookie,
     status_for as canva_status_for,
 )
+from agentic_ai.billing import (
+    can_consume,
+    consume,
+    create_order,
+    quota_error_payload,
+    razorpay_configured,
+    status_for as billing_status_for,
+    verify_and_credit,
+)
 from agentic_ai.config import load_settings, save_groq_key
 from agentic_ai.crew import Crew
 from agentic_ai.files import FileExtractError, extract_bytes
@@ -134,6 +143,17 @@ class LocalLogin(BaseModel):
 class CanvaKeys(BaseModel):
     client_id: str = ""
     client_secret: str = ""
+
+
+class BillingOrder(BaseModel):
+    pack: str
+
+
+class BillingVerify(BaseModel):
+    pack: str
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 
 def _is_loopback_host(host: str | None) -> bool:
@@ -524,8 +544,59 @@ def _page_build_note(message: str) -> str:
     return "\n\n" + PREMIUM_PAGE_DESIGN + "\n"
 
 
+@app.get("/api/billing/status")
+def billing_status(user: dict = Depends(require_user)) -> dict:
+    return billing_status_for(str(user.get("email") or ""))
+
+
+@app.post("/api/billing/order")
+def billing_order(req: BillingOrder, user: dict = Depends(require_user)) -> dict:
+    if not razorpay_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Payments are not configured yet. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+        )
+    try:
+        return create_order(str(user.get("email") or ""), req.pack)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/billing/verify")
+def billing_verify(req: BillingVerify, user: dict = Depends(require_user)) -> dict:
+    try:
+        return verify_and_credit(
+            str(user.get("email") or ""),
+            pack_id=req.pack,
+            order_id=req.razorpay_order_id,
+            payment_id=req.razorpay_payment_id,
+            signature=req.razorpay_signature,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.post("/api/chat")
-def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingResponse:
+def chat(req: ChatRequest, user: dict = Depends(require_user)):
+    email = str(user.get("email") or "")
+    photos_preview = [
+        url
+        for url in req.images[:4]
+        if isinstance(url, str) and url.startswith("data:image/") and len(url) < 4_000_000
+    ]
+    with_photo = bool(photos_preview)
+    ok, _info = can_consume(email, with_photo=with_photo)
+    if not ok:
+        return JSONResponse(status_code=402, content=quota_error_payload(email))
+    try:
+        consume(email, with_photo=with_photo)
+    except ValueError:
+        return JSONResponse(status_code=402, content=quota_error_payload(email))
+
     events: queue.Queue[dict | None] = queue.Queue()
 
     def on_trace(line: str) -> None:
@@ -543,11 +614,7 @@ def chat(req: ChatRequest, user: dict = Depends(require_user)) -> StreamingRespo
                     + _page_build_note(req.message)
                     + _project_note(req)
                 )
-                photos = [
-                    url
-                    for url in req.images[:4]
-                    if isinstance(url, str) and url.startswith("data:image/") and len(url) < 4_000_000
-                ]
+                photos = photos_preview
 
                 def on_token(piece: str) -> None:
                     if piece:

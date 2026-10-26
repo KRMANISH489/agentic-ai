@@ -110,10 +110,28 @@ LLM_PROVIDER=ollama
 LLM_MODEL=llama3.2
 ```
 
+## Credits / Razorpay top-ups
+
+Free users get a daily quota (default **20 chats** + **5 photo messages**). When that runs out, the UI shows a **Top up** paywall:
+
+| Pack | Default | Price |
+| --- | --- | --- |
+| Student | +50 chats, +20 photos | ₹49 |
+| Business | +200 chats, +80 photos | ₹199 |
+
+Add keys to `.env` (and to Render env for production):
+
+```
+RAZORPAY_KEY_ID=rzp_test_...
+RAZORPAY_KEY_SECRET=...
+```
+
+Paid credits are stored per login email in `billing_usage.json` (gitignored).
+
 ## Project structure
 
 ```
-agentic_ai/     → ReAct agent, tools, auth
+agentic_ai/     → ReAct agent, tools, auth, billing
 frontend/       → Next.js chat UI
 app.py          → FastAPI API (port 7860)
 Dockerfile      → one-container live deploy

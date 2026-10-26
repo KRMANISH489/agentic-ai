@@ -65,7 +65,7 @@
       min-height: 0;
       overflow: hidden;
     }
-    .brand, .new-chat, .mode-picker, .project-picker, .project-card, .history-label, .history-search, .user-dock, .model-chip {
+    .brand, .new-chat, .mode-picker, .project-picker, .project-card, .history-label, .history-search, .user-dock, .model-chip, .credit-chip {
       flex-shrink: 0;
     }
     .brand {
@@ -238,6 +238,66 @@
       padding: 8px;
       line-height: 1.4;
     }
+    .credit-chip {
+      margin: 0 8px 10px;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .credit-chip:hover {
+      border-color: rgba(219, 143, 42, 0.45);
+      background: var(--hover);
+    }
+    .credit-chip strong { color: var(--orange-dark, #b8741c); font-weight: 700; }
+    .linkish {
+      border: 0;
+      background: none;
+      color: var(--orange-dark, #b8741c);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+    }
+    .pay-modal { width: min(640px, 100%); }
+    .pay-remain {
+      margin: 0 0 14px;
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .pay-error {
+      margin: 0 0 12px;
+      color: var(--danger, #a33);
+      font-size: 14px;
+    }
+    .pay-card {
+      gap: 8px;
+      cursor: default;
+    }
+    .pay-card em {
+      font-style: normal;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .pay-btn {
+      margin-top: 6px;
+      border: 0;
+      background: var(--orange);
+      color: var(--on-accent, #fff);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .pay-btn:hover:not(:disabled) { background: var(--orange-dark); }
+    .pay-btn:disabled { opacity: 0.5; cursor: default; }
     .history-label {
       font-size: 11px;
       letter-spacing: 0.08em;
