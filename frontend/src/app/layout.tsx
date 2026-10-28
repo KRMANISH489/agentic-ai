@@ -77,10 +77,10 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.png?v=5", type: "image/png" },
-      { url: "/favicon.svg?v=5", type: "image/svg+xml" },
+      { url: "/favicon.png?v=6", type: "image/png" },
+      { url: "/favicon.svg?v=6", type: "image/svg+xml" },
     ],
-    apple: "/favicon.png?v=5",
+    apple: "/favicon.png?v=6",
   },
   manifest: "/manifest.webmanifest",
   verification: { google: googleVerify },
