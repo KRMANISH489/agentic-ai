@@ -711,7 +711,7 @@ export default function AppClient() {
           description: `${pack.title} top-up`,
           order_id: orderData.order_id,
           prefill: orderData.prefill || { email: user?.email || "" },
-          theme: { color: "#db8f2a" },
+          theme: { color: "#0a84ff" },
           handler: async (response: RazorpaySuccess) => {
             try {
               const verifyRes = await fetch("/api/billing/verify", {
@@ -2554,7 +2554,7 @@ export default function AppClient() {
                 rows={5}
                 value={teachMem}
                 onChange={(e) => setTeachMem(e.target.value)}
-                placeholder="Example: My name is Ravi. Brand colors are gold #db8f2a and cream #dacebe."
+                placeholder="Example: My name is Ravi. Brand colors are blue #0a84ff and light #eef4fb."
               />
               <button
                 className="install"

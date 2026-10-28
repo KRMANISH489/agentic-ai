@@ -26,7 +26,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#db8f2a",
+  themeColor: "#0a84ff",
 };
 
 const googleVerify =
@@ -77,10 +77,10 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.png?v=6", type: "image/png" },
-      { url: "/favicon.svg?v=6", type: "image/svg+xml" },
+      { url: "/favicon.png?v=7", type: "image/png" },
+      { url: "/favicon.svg?v=7", type: "image/svg+xml" },
     ],
-    apple: "/favicon.png?v=6",
+    apple: "/favicon.png?v=7",
   },
   manifest: "/manifest.webmanifest",
   verification: { google: googleVerify },

@@ -15,7 +15,7 @@ export default function OpenGraphImage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "#f1f1f1",
+          background: "#eef4fb",
           padding: "64px 72px",
           fontFamily: "Georgia, serif",
         }}
@@ -35,7 +35,7 @@ export default function OpenGraphImage() {
               width: 48,
               height: 48,
               borderRadius: 14,
-              background: "#db8f2a",
+              background: "#0a84ff",
             }}
           />
           Agentic AI
